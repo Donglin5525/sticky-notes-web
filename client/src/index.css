@@ -175,6 +175,15 @@
       radial-gradient(at 100% 100%, oklch(0.95 0.05 180 / 0.5) 0px, transparent 50%),
       radial-gradient(at 0% 100%, oklch(0.95 0.05 60 / 0.5) 0px, transparent 50%);
     background-attachment: fixed;
+    
+    /* Chrome Extension Popup */
+  }
+  body {
+    width: 800px;
+    height: 600px;
+    overflow: hidden;
+    margin: 0;
+    padding: 0;
   }
   .dark body {
     background-image: 

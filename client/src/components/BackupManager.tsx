@@ -19,7 +19,7 @@ export function BackupManager() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    toast.success('Backup exported successfully');
+    toast.success('备份导出成功');
   };
 
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -34,15 +34,15 @@ export function BackupManager() {
           // In a real app, we'd validate the schema here
           // For now, we'll just merge them or replace them
           // Let's replace for simplicity, but warn user
-          if (confirm('This will replace your current notes. Are you sure?')) {
+            if (confirm('这将覆盖您当前的便签。确定要继续吗？')) {
             useNoteStore.setState({ notes: importedNotes });
-            toast.success('Notes imported successfully');
+            toast.success('便签导入成功');
           }
         } else {
-          toast.error('Invalid backup file format');
+          toast.error('无效的备份文件格式');
         }
       } catch (error) {
-        toast.error('Failed to parse backup file');
+        toast.error('解析备份文件失败');
       }
     };
     reader.readAsText(file);
@@ -58,7 +58,7 @@ export function BackupManager() {
         className="flex-1 bg-white/50 border-white/20 hover:bg-white/80"
         onClick={handleExport}
       >
-        <Download className="mr-2 h-4 w-4" /> Backup
+        <Download className="mr-2 h-4 w-4" /> 备份
       </Button>
       <Button 
         variant="outline" 
@@ -66,7 +66,7 @@ export function BackupManager() {
         className="flex-1 bg-white/50 border-white/20 hover:bg-white/80"
         onClick={() => fileInputRef.current?.click()}
       >
-        <Upload className="mr-2 h-4 w-4" /> Restore
+        <Upload className="mr-2 h-4 w-4" /> 恢复
       </Button>
       <input
         type="file"

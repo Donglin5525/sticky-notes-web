@@ -12,10 +12,12 @@ import {
   LayoutGrid, 
   Palette,
   Github,
-  Menu
+  Menu,
+  Keyboard,
+  Tag
 } from 'lucide-react';
 import { BackupManager } from '@/components/BackupManager';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Sheet,
   SheetContent,
@@ -23,6 +25,9 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+
+// Add chrome type definition for extension API
+declare const chrome: any;
 
 const colors: { value: NoteColor | 'all'; label: string; class: string }[] = [
   { value: 'all', label: 'All', class: 'bg-white border-2 border-gray-200' },
@@ -42,25 +47,63 @@ export default function Home() {
     setSearchQuery, 
     filterColor, 
     setFilterColor,
-    emptyTrash 
+    filterTag,
+    setFilterTag,
+    emptyTrash,
+    deleteNote
   } = useNoteStore();
   
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [showTrash, setShowTrash] = useState(false);
 
+  // Extract all unique tags from notes
+  const allTags = useMemo(() => {
+    const tags = new Set<string>();
+    notes.forEach(note => {
+      if (!note.isDeleted && note.tags) {
+        note.tags.forEach(tag => tags.add(tag));
+      }
+    });
+    return Array.from(tags).sort();
+  }, [notes]);
+
   const filteredNotes = notes.filter((note: import('@/lib/store').Note) => {
     const matchesSearch = (note.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           note.content.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesColor = filterColor === 'all' || note.color === filterColor;
+    const matchesTag = !filterTag || (note.tags && note.tags.includes(filterTag));
     const matchesTrash = showTrash ? note.isDeleted : !note.isDeleted;
     
-    return matchesSearch && matchesColor && matchesTrash;
+    return matchesSearch && matchesColor && matchesTag && matchesTrash;
   });
 
   const handleAddNote = () => {
+    // If we are in trash view, switch back to normal view first
+    if (showTrash) {
+      setShowTrash(false);
+    }
     const newId = addNote();
     setSelectedNoteId(newId);
-    setShowTrash(false);
+  };
+
+  // Handle note deletion with smart navigation
+  const handleDeleteNote = (id: string) => {
+    const currentIndex = filteredNotes.findIndex(n => n.id === id);
+    deleteNote(id);
+    
+    // If the deleted note was selected, try to select the next one
+    if (selectedNoteId === id) {
+      // Try to select the next note, or the previous one if it was the last
+      let nextNoteToSelect = null;
+      if (filteredNotes.length > 1) {
+        if (currentIndex < filteredNotes.length - 1) {
+          nextNoteToSelect = filteredNotes[currentIndex + 1];
+        } else if (currentIndex > 0) {
+          nextNoteToSelect = filteredNotes[currentIndex - 1];
+        }
+      }
+      setSelectedNoteId(nextNoteToSelect ? nextNoteToSelect.id : null);
+    }
   };
 
   return (
@@ -72,7 +115,7 @@ export default function Home() {
             <LayoutGrid className="h-5 w-5 text-white" />
           </div>
           <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-purple-600">
-            Sticky Zen
+            便签
           </h1>
         </div>
 
@@ -81,18 +124,18 @@ export default function Home() {
           className="w-full shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all hover:-translate-y-0.5"
           onClick={handleAddNote}
         >
-          <Plus className="mr-2 h-5 w-5" /> New Note
+          <Plus className="mr-2 h-5 w-5" /> 新建便签
         </Button>
 
         <div className="space-y-4">
           <div className="px-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            Filters
+            筛选
           </div>
           
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input 
-              placeholder="Search notes..." 
+              placeholder="搜索便签..." 
               className="pl-9 bg-white/50 border-white/20 focus:bg-white/80 transition-colors"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -101,7 +144,7 @@ export default function Home() {
 
           <div className="space-y-2">
             <div className="flex items-center gap-2 px-2 text-sm text-muted-foreground">
-              <Palette className="h-4 w-4" /> Colors
+              <Palette className="h-4 w-4" /> 颜色主题
             </div>
             <div className="grid grid-cols-4 gap-2 px-2">
               {colors.map((c) => (
@@ -118,18 +161,62 @@ export default function Home() {
               ))}
             </div>
           </div>
+
+          {allTags.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 px-2 text-sm text-muted-foreground">
+                <Tag className="h-4 w-4" /> 标签
+              </div>
+              <div className="flex flex-wrap gap-2 px-2">
+                <button
+                  className={cn(
+                    "text-xs px-2 py-1 rounded-md transition-colors",
+                    filterTag === null 
+                      ? "bg-primary text-primary-foreground" 
+                      : "bg-white/50 hover:bg-white/80 text-muted-foreground"
+                  )}
+                  onClick={() => setFilterTag(null)}
+                >
+                  全部
+                </button>
+                {allTags.map(tag => (
+                  <button
+                    key={tag}
+                    className={cn(
+                      "text-xs px-2 py-1 rounded-md transition-colors",
+                      filterTag === tag 
+                        ? "bg-primary text-primary-foreground" 
+                        : "bg-white/50 hover:bg-white/80 text-muted-foreground"
+                    )}
+                    onClick={() => setFilterTag(tag === filterTag ? null : tag)}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           
           <BackupManager />
         </div>
 
-        <div className="mt-auto pt-4 border-t border-white/10">
+        <div className="mt-auto pt-4 border-t border-white/10 space-y-2">
+          <Button 
+            variant="ghost" 
+            className="w-full justify-start text-muted-foreground hover:text-primary hover:bg-primary/10"
+            onClick={() => chrome.tabs.create({ url: 'chrome://extensions/shortcuts' })}
+          >
+            <Keyboard className="mr-2 h-4 w-4" /> 
+            快捷键设置
+          </Button>
+
           <Button 
             variant={showTrash ? "secondary" : "ghost"} 
             className={cn("w-full justify-start", showTrash && "bg-white/50")}
             onClick={() => setShowTrash(!showTrash)}
           >
             <Trash2 className="mr-2 h-4 w-4" /> 
-            {showTrash ? 'View Notes' : 'Trash'}
+            {showTrash ? '返回所有便签' : '回收站'}
           </Button>
           
           {showTrash && filteredNotes.length > 0 && (
@@ -139,7 +226,7 @@ export default function Home() {
               className="w-full mt-2"
               onClick={emptyTrash}
             >
-              Empty Trash
+              清空回收站
             </Button>
           )}
         </div>
@@ -203,15 +290,15 @@ export default function Home() {
         )}>
           <div className="flex items-center justify-between mb-6 mt-16 md:mt-0">
             <h2 className="text-2xl font-bold text-foreground/80">
-              {showTrash ? 'Trash' : filterColor === 'all' ? 'All Notes' : `${filterColor.charAt(0).toUpperCase() + filterColor.slice(1)} Notes`}
+              {showTrash ? '回收站' : filterTag ? `#${filterTag}` : '所有便签'}
             </h2>
             <span className="text-sm text-muted-foreground bg-white/30 px-2 py-1 rounded-full">
-              {filteredNotes.length}
+              共 {filteredNotes.length} 条
             </span>
           </div>
 
-          <ScrollArea className="flex-1 -mx-4 px-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 pb-20">
+          <ScrollArea className="flex-1 -mx-4 px-4 h-full">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 pb-20 auto-rows-max">
               {/* Masonry-like grid for when no note is selected, single column when selected */}
               <div className={cn(
                 "contents",
@@ -222,7 +309,7 @@ export default function Home() {
                     <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
                       {showTrash ? <Trash2 className="h-8 w-8 opacity-50" /> : <LayoutGrid className="h-8 w-8 opacity-50" />}
                     </div>
-                    <p>No notes found</p>
+                    <p>没有找到便签</p>
                   </div>
                 ) : (
                   filteredNotes.map((note: import('@/lib/store').Note) => (
@@ -256,16 +343,17 @@ export default function Home() {
           selectedNoteId ? "translate-x-0 opacity-100" : "translate-x-full opacity-0 md:translate-x-0 md:opacity-100 md:bg-transparent md:backdrop-blur-none"
         )}>
           {selectedNoteId ? (
-            <div className="w-full max-w-3xl h-full md:h-[90%]">
+            <div className="w-full max-w-3xl h-full">
               <NoteEditor 
                 noteId={selectedNoteId} 
                 onClose={() => setSelectedNoteId(null)} 
+                onDelete={handleDeleteNote}
               />
             </div>
           ) : (
             <div className="hidden md:flex flex-col items-center justify-center text-muted-foreground/50">
               <LayoutGrid className="h-24 w-24 mb-4 opacity-20" />
-              <p className="text-xl font-medium">Select a note to view</p>
+              <p className="text-xl font-medium">选择一个便签查看详情</p>
             </div>
           )}
         </div>

@@ -1,16 +1,22 @@
 import { Note, NoteColor, useNoteStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
+import { zhCN } from 'date-fns/locale';
 import { 
   X, 
   Trash2, 
   Image as ImageIcon, 
   MoreVertical, 
   Check,
-  Clock
+  Clock,
+  Tag,
+  Plus
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from './ui/button';
+import { Badge } from './ui/badge';
+import { Input } from './ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,6 +28,7 @@ import { ScrollArea } from './ui/scroll-area';
 interface NoteEditorProps {
   noteId: string;
   onClose: () => void;
+  onDelete?: (id: string) => void;
 }
 
 const colors: { value: NoteColor; label: string; class: string }[] = [
@@ -48,6 +55,7 @@ export function NoteEditor({ noteId, onClose }: NoteEditorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [newTag, setNewTag] = useState('');
 
   useEffect(() => {
     if (note) {
@@ -91,6 +99,19 @@ export function NoteEditor({ noteId, onClose }: NoteEditorProps) {
     }
   };
 
+  const handleAddTag = () => {
+    if (newTag.trim() && !note.tags?.includes(newTag.trim())) {
+      const updatedTags = [...(note.tags || []), newTag.trim()];
+      updateNote(noteId, { tags: updatedTags });
+      setNewTag('');
+    }
+  };
+
+  const removeTag = (tagToRemove: string) => {
+    const updatedTags = note.tags?.filter(tag => tag !== tagToRemove) || [];
+    updateNote(noteId, { tags: updatedTags });
+  };
+
   return (
     <div className={cn(
       "flex flex-col h-full w-full rounded-[var(--radius)] shadow-2xl overflow-hidden transition-colors duration-500",
@@ -100,7 +121,7 @@ export function NoteEditor({ noteId, onClose }: NoteEditorProps) {
       <div className="flex items-center justify-between p-4 border-b border-black/5 bg-white/10 backdrop-blur-sm">
         <div className="flex items-center gap-2 text-xs text-foreground/60">
           <Clock className="h-3 w-3" />
-          <span>Edited {formatDistanceToNow(note.updatedAt, { addSuffix: true })}</span>
+          <span>编辑于 {formatDistanceToNow(note.updatedAt, { addSuffix: true, locale: zhCN })}</span>
         </div>
         
         <div className="flex items-center gap-1">
@@ -133,7 +154,7 @@ export function NoteEditor({ noteId, onClose }: NoteEditorProps) {
             size="icon" 
             className="h-8 w-8 hover:bg-black/5"
             onClick={() => fileInputRef.current?.click()}
-            title="Add Image"
+            title="添加图片"
           >
             <ImageIcon className="h-4 w-4 text-foreground/70" />
           </Button>
@@ -150,7 +171,7 @@ export function NoteEditor({ noteId, onClose }: NoteEditorProps) {
             size="icon" 
             className="h-8 w-8 hover:bg-destructive/10 text-destructive/70 hover:text-destructive"
             onClick={handleDelete}
-            title="Delete Note"
+            title="删除便签"
           >
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -172,16 +193,50 @@ export function NoteEditor({ noteId, onClose }: NoteEditorProps) {
           type="text"
           value={title}
           onChange={handleTitleChange}
-          placeholder="Title"
+          placeholder="标题"
           className="w-full bg-transparent border-none text-2xl font-bold placeholder:text-foreground/30 focus:outline-none mb-4 text-foreground/90"
         />
         
         <textarea
           value={content}
           onChange={handleContentChange}
-          placeholder="Start typing..."
+          placeholder="开始输入..."
           className="w-full min-h-[300px] bg-transparent border-none resize-none text-lg leading-relaxed placeholder:text-foreground/30 focus:outline-none text-foreground/80 font-sans"
         />
+
+        {/* Tags Section */}
+        <div className="flex flex-wrap gap-2 mb-6">
+          {note.tags?.map(tag => (
+            <Badge key={tag} variant="secondary" className="bg-black/5 hover:bg-black/10 text-foreground/70 gap-1 pr-1">
+              {tag}
+              <button onClick={() => removeTag(tag)} className="hover:text-destructive">
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          ))}
+          
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-6 text-xs text-muted-foreground hover:text-primary px-2">
+                <Plus className="h-3 w-3 mr-1" /> 添加标签
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-48 p-2" align="start">
+              <div className="flex gap-2">
+                <Input 
+                  value={newTag}
+                  onChange={(e) => setNewTag(e.target.value)}
+                  placeholder="新标签..."
+                  className="h-8 text-sm"
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddTag()}
+                />
+                <Button size="sm" className="h-8 w-8 p-0" onClick={handleAddTag}>
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
 
         {/* Images Grid */}
         {note.images.length > 0 && (
