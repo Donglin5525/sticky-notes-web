@@ -13,12 +13,14 @@ export interface Note {
   updatedAt: number;
   isDeleted: boolean;
   images: string[]; // Base64 strings for simplicity in this static version
+  tags: string[];
 }
 
 interface NoteState {
   notes: Note[];
   searchQuery: string;
   filterColor: NoteColor | 'all';
+  filterTag: string | null;
   
   // Actions
   addNote: () => string;
@@ -29,6 +31,7 @@ interface NoteState {
   emptyTrash: () => void;
   setSearchQuery: (query: string) => void;
   setFilterColor: (color: NoteColor | 'all') => void;
+  setFilterTag: (tag: string | null) => void;
   addImageToNote: (id: string, imageBase64: string) => void;
 }
 
@@ -38,18 +41,30 @@ const createNoteStore: NoteStoreCreator = (set, get) => ({
   notes: [],
   searchQuery: '',
   filterColor: 'all',
+  filterTag: null,
 
   addNote: () => {
+    const state = get();
+    // Use current filter color if it's a specific color, otherwise default to yellow
+    const initialColor: NoteColor = state.filterColor !== 'all' ? state.filterColor : 'yellow';
+    
     const newNote: Note = {
       id: nanoid(),
       title: '',
       content: '',
-      color: 'yellow',
+      color: initialColor,
       createdAt: Date.now(),
       updatedAt: Date.now(),
       isDeleted: false,
       images: [],
+      tags: [],
     };
+    
+    // If we have a tag filter active, automatically add that tag to the new note
+    if (state.filterTag) {
+      newNote.tags = [state.filterTag];
+    }
+    
     set((state) => ({ notes: [newNote, ...state.notes] }));
     return newNote.id;
   },
@@ -95,6 +110,8 @@ const createNoteStore: NoteStoreCreator = (set, get) => ({
   setSearchQuery: (query: string) => set({ searchQuery: query }),
   
   setFilterColor: (color: NoteColor | 'all') => set({ filterColor: color }),
+
+  setFilterTag: (tag: string | null) => set({ filterTag: tag }),
 
   addImageToNote: (id: string, imageBase64: string) => {
     set((state) => ({
