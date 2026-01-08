@@ -48,118 +48,136 @@
   --color-note-pink: var(--note-pink);
   --color-note-purple: var(--note-purple);
   --color-note-orange: var(--note-orange);
+  
+  /* Quadrant Colors */
+  --color-quadrant-do: var(--quadrant-do);
+  --color-quadrant-schedule: var(--quadrant-schedule);
+  --color-quadrant-delegate: var(--quadrant-delegate);
+  --color-quadrant-eliminate: var(--quadrant-eliminate);
 }
 
 /* 
-  Design Concept: Glassmorphic Zen
-  - Ethereal Daylight Palette
-  - Translucency & Depth
-  - Softness & Roundness
+  Design Concept: Modern Productivity Dashboard
+  - Clean, spacious layout
+  - Soft gradients and glassmorphism
+  - Clear visual hierarchy for priority management
 */
 
 :root {
-  /* Base Colors - Soft & Airy */
-  --background: oklch(0.98 0.01 240); /* Very light cool gray/blue tint */
-  --foreground: oklch(0.25 0.02 250); /* Dark slate for readability */
+  /* Base Colors - Clean & Professional */
+  --background: oklch(0.98 0.005 250);
+  --foreground: oklch(0.2 0.02 250);
   
   /* Glass Layers */
-  --card: oklch(1 0 0 / 0.6); /* Semi-transparent white */
-  --card-foreground: oklch(0.25 0.02 250);
-  --popover: oklch(1 0 0 / 0.8);
-  --popover-foreground: oklch(0.25 0.02 250);
+  --card: oklch(1 0 0 / 0.7);
+  --card-foreground: oklch(0.2 0.02 250);
+  --popover: oklch(1 0 0 / 0.9);
+  --popover-foreground: oklch(0.2 0.02 250);
   
-  /* Primary Action - Soft Blue/Purple Gradient feel */
-  --primary: oklch(0.65 0.15 260); /* Soft Lavender/Blue */
+  /* Primary Action - Vibrant Purple/Blue */
+  --primary: oklch(0.55 0.2 270);
   --primary-foreground: oklch(1 0 0);
   
   /* Secondary - Subtle Gray */
-  --secondary: oklch(0.95 0.01 240);
+  --secondary: oklch(0.95 0.005 250);
   --secondary-foreground: oklch(0.35 0.02 250);
   
   /* Muted - For de-emphasized text */
-  --muted: oklch(0.92 0.01 240);
-  --muted-foreground: oklch(0.55 0.02 250);
+  --muted: oklch(0.94 0.005 250);
+  --muted-foreground: oklch(0.5 0.02 250);
   
   /* Accent - For hover states */
-  --accent: oklch(0.95 0.02 260);
-  --accent-foreground: oklch(0.25 0.02 250);
+  --accent: oklch(0.95 0.02 270);
+  --accent-foreground: oklch(0.2 0.02 250);
   
   /* Destructive - Soft Red */
-  --destructive: oklch(0.65 0.18 25);
+  --destructive: oklch(0.6 0.2 25);
   --destructive-foreground: oklch(1 0 0);
   
-  /* Borders & Inputs - Subtle */
-  --border: oklch(0.9 0.01 240);
-  --input: oklch(0.9 0.01 240);
-  --ring: oklch(0.65 0.15 260 / 0.5);
+  /* Borders & Inputs */
+  --border: oklch(0.9 0.005 250);
+  --input: oklch(0.92 0.005 250);
+  --ring: oklch(0.55 0.2 270 / 0.4);
   
-  /* Radius - Generous & Soft */
-  --radius: 1rem; /* 16px */
+  /* Radius */
+  --radius: 0.75rem;
   
-  /* Note Colors - Pastel but vibrant enough */
-  --note-yellow: oklch(0.95 0.1 90);
-  --note-green: oklch(0.93 0.1 140);
-  --note-blue: oklch(0.92 0.08 230);
-  --note-pink: oklch(0.93 0.08 340);
-  --note-purple: oklch(0.92 0.08 290);
-  --note-orange: oklch(0.92 0.1 50);
+  /* Note Colors - Vibrant Pastels */
+  --note-yellow: oklch(0.95 0.12 90);
+  --note-green: oklch(0.92 0.12 145);
+  --note-blue: oklch(0.92 0.1 230);
+  --note-pink: oklch(0.92 0.1 350);
+  --note-purple: oklch(0.92 0.1 290);
+  --note-orange: oklch(0.92 0.12 55);
+  
+  /* Quadrant Colors - Eisenhower Matrix */
+  --quadrant-do: oklch(0.6 0.18 25);       /* Red - Do First */
+  --quadrant-schedule: oklch(0.55 0.18 270); /* Purple - Schedule */
+  --quadrant-delegate: oklch(0.6 0.15 145);  /* Green - Delegate */
+  --quadrant-eliminate: oklch(0.6 0.02 250); /* Gray - Eliminate */
 
   /* Sidebar */
-  --sidebar: oklch(1 0 0 / 0.4);
+  --sidebar: oklch(0.98 0.005 250);
   --sidebar-foreground: oklch(0.3 0.02 250);
-  --sidebar-primary: oklch(0.65 0.15 260);
+  --sidebar-primary: oklch(0.55 0.2 270);
   --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.95 0.02 260);
-  --sidebar-accent-foreground: oklch(0.25 0.02 250);
-  --sidebar-border: oklch(0.9 0.01 240 / 0.5);
-  --sidebar-ring: oklch(0.65 0.15 260 / 0.5);
+  --sidebar-accent: oklch(0.95 0.02 270);
+  --sidebar-accent-foreground: oklch(0.2 0.02 250);
+  --sidebar-border: oklch(0.92 0.005 250);
+  --sidebar-ring: oklch(0.55 0.2 270 / 0.4);
 }
 
 .dark {
-  /* Dark Mode - Deep Glass */
-  --background: oklch(0.15 0.02 260); /* Deep Blue/Gray */
-  --foreground: oklch(0.95 0.01 240);
+  /* Dark Mode */
+  --background: oklch(0.13 0.02 260);
+  --foreground: oklch(0.95 0.005 250);
   
-  --card: oklch(0.2 0.02 260 / 0.6);
-  --card-foreground: oklch(0.95 0.01 240);
-  --popover: oklch(0.2 0.02 260 / 0.8);
-  --popover-foreground: oklch(0.95 0.01 240);
+  --card: oklch(0.18 0.02 260 / 0.8);
+  --card-foreground: oklch(0.95 0.005 250);
+  --popover: oklch(0.18 0.02 260 / 0.95);
+  --popover-foreground: oklch(0.95 0.005 250);
   
-  --primary: oklch(0.7 0.15 260);
-  --primary-foreground: oklch(1 0 0);
+  --primary: oklch(0.7 0.18 270);
+  --primary-foreground: oklch(0.1 0.02 260);
   
-  --secondary: oklch(0.25 0.02 260);
-  --secondary-foreground: oklch(0.9 0.01 240);
+  --secondary: oklch(0.2 0.02 260);
+  --secondary-foreground: oklch(0.9 0.005 250);
   
-  --muted: oklch(0.25 0.02 260);
-  --muted-foreground: oklch(0.7 0.02 250);
+  --muted: oklch(0.22 0.02 260);
+  --muted-foreground: oklch(0.65 0.02 250);
   
-  --accent: oklch(0.25 0.02 260);
-  --accent-foreground: oklch(0.95 0.01 240);
+  --accent: oklch(0.25 0.03 270);
+  --accent-foreground: oklch(0.95 0.005 250);
   
-  --destructive: oklch(0.6 0.18 25);
+  --destructive: oklch(0.55 0.2 25);
   --destructive-foreground: oklch(1 0 0);
   
-  --border: oklch(0.3 0.02 260);
-  --input: oklch(0.3 0.02 260);
-  --ring: oklch(0.7 0.15 260 / 0.5);
+  --border: oklch(0.25 0.02 260);
+  --input: oklch(0.22 0.02 260);
+  --ring: oklch(0.7 0.18 270 / 0.4);
   
-  /* Note Colors - Slightly darker/richer for dark mode */
-  --note-yellow: oklch(0.85 0.12 90);
-  --note-green: oklch(0.8 0.12 140);
-  --note-blue: oklch(0.8 0.1 230);
-  --note-pink: oklch(0.8 0.1 340);
-  --note-purple: oklch(0.8 0.1 290);
-  --note-orange: oklch(0.8 0.12 50);
+  /* Note Colors - Darker variants */
+  --note-yellow: oklch(0.75 0.12 90);
+  --note-green: oklch(0.72 0.12 145);
+  --note-blue: oklch(0.72 0.1 230);
+  --note-pink: oklch(0.72 0.1 350);
+  --note-purple: oklch(0.72 0.1 290);
+  --note-orange: oklch(0.72 0.12 55);
+  
+  /* Quadrant Colors - Darker */
+  --quadrant-do: oklch(0.5 0.18 25);
+  --quadrant-schedule: oklch(0.5 0.18 270);
+  --quadrant-delegate: oklch(0.5 0.15 145);
+  --quadrant-eliminate: oklch(0.4 0.02 250);
 
-  --sidebar: oklch(0.15 0.02 260 / 0.4);
-  --sidebar-foreground: oklch(0.9 0.01 240);
-  --sidebar-primary: oklch(0.7 0.15 260);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.25 0.02 260);
-  --sidebar-accent-foreground: oklch(0.95 0.01 240);
-  --sidebar-border: oklch(0.3 0.02 260 / 0.5);
-  --sidebar-ring: oklch(0.7 0.15 260 / 0.5);
+  --sidebar: oklch(0.15 0.02 260);
+  --sidebar-foreground: oklch(0.9 0.005 250);
+  --sidebar-primary: oklch(0.7 0.18 270);
+  --sidebar-primary-foreground: oklch(0.1 0.02 260);
+  --sidebar-accent: oklch(0.22 0.03 270);
+  --sidebar-accent-foreground: oklch(0.95 0.005 250);
+  --sidebar-border: oklch(0.25 0.02 260);
+  --sidebar-ring: oklch(0.7 0.18 270 / 0.4);
 }
 
 @layer base {
@@ -168,29 +186,22 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
-    /* Subtle gradient background */
+    font-family: 'Inter', 'Noto Sans SC', system-ui, -apple-system, sans-serif;
+    /* Subtle mesh gradient background */
     background-image: 
-      radial-gradient(at 0% 0%, oklch(0.95 0.05 240 / 0.5) 0px, transparent 50%),
-      radial-gradient(at 100% 0%, oklch(0.95 0.05 300 / 0.5) 0px, transparent 50%),
-      radial-gradient(at 100% 100%, oklch(0.95 0.05 180 / 0.5) 0px, transparent 50%),
-      radial-gradient(at 0% 100%, oklch(0.95 0.05 60 / 0.5) 0px, transparent 50%);
+      radial-gradient(at 0% 0%, oklch(0.95 0.04 270 / 0.4) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, oklch(0.95 0.04 200 / 0.3) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, oklch(0.95 0.04 320 / 0.3) 0px, transparent 50%),
+      radial-gradient(at 0% 100%, oklch(0.95 0.04 90 / 0.3) 0px, transparent 50%);
     background-attachment: fixed;
-    
-    /* Chrome Extension Popup */
-  }
-  body {
-    width: 800px;
-    height: 600px;
-    overflow: hidden;
-    margin: 0;
-    padding: 0;
+    min-height: 100vh;
   }
   .dark body {
     background-image: 
-      radial-gradient(at 0% 0%, oklch(0.2 0.05 240 / 0.3) 0px, transparent 50%),
-      radial-gradient(at 100% 0%, oklch(0.2 0.05 300 / 0.3) 0px, transparent 50%),
-      radial-gradient(at 100% 100%, oklch(0.2 0.05 180 / 0.3) 0px, transparent 50%),
-      radial-gradient(at 0% 100%, oklch(0.2 0.05 60 / 0.3) 0px, transparent 50%);
+      radial-gradient(at 0% 0%, oklch(0.2 0.05 270 / 0.3) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, oklch(0.2 0.05 200 / 0.2) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, oklch(0.2 0.05 320 / 0.2) 0px, transparent 50%),
+      radial-gradient(at 0% 100%, oklch(0.2 0.05 90 / 0.2) 0px, transparent 50%);
   }
   
   button:not(:disabled),
@@ -231,20 +242,39 @@
     .container {
       padding-left: 2rem;
       padding-right: 2rem;
-      max-width: 1280px;
+      max-width: 1400px;
     }
   }
   
   /* Glassmorphism Utilities */
   .glass {
-    @apply bg-card/60 backdrop-blur-xl border border-white/20 shadow-lg;
+    @apply bg-card/70 backdrop-blur-xl border border-white/20 shadow-lg;
   }
   
   .glass-hover {
-    @apply hover:bg-card/80 transition-all duration-300 hover:shadow-xl hover:-translate-y-1;
+    @apply hover:bg-card/90 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5;
   }
   
   .glass-panel {
-    @apply bg-background/40 backdrop-blur-2xl border border-white/10 shadow-2xl;
+    @apply bg-background/60 backdrop-blur-2xl border border-white/10 shadow-2xl;
+  }
+  
+  /* Quadrant Styles */
+  .quadrant-do {
+    @apply border-l-4 border-l-quadrant-do;
+  }
+  .quadrant-schedule {
+    @apply border-l-4 border-l-quadrant-schedule;
+  }
+  .quadrant-delegate {
+    @apply border-l-4 border-l-quadrant-delegate;
+  }
+  .quadrant-eliminate {
+    @apply border-l-4 border-l-quadrant-eliminate;
+  }
+  
+  /* Note Card Hover */
+  .note-card {
+    @apply transition-all duration-200 hover:shadow-lg hover:-translate-y-1;
   }
 }
