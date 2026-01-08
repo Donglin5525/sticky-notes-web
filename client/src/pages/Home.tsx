@@ -356,15 +356,15 @@ export default function Home() {
             <h3 className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">
               颜色筛选
             </h3>
-            <div className="grid grid-cols-5 gap-2 max-w-[180px]">
+            <div className="grid grid-cols-5 gap-3 max-w-[200px]">
               <button
                 onClick={() => setFilterColor("all")}
                 className={cn(
-                  "w-7 h-7 rounded-full border-2 transition-all hover:scale-110",
+                  "w-8 h-8 rounded-full transition-all hover:scale-110",
                   "bg-gradient-to-br from-note-yellow via-note-pink to-note-blue",
                   filterColor === "all"
-                    ? "ring-2 ring-primary ring-offset-2"
-                    : "border-transparent"
+                    ? "shadow-[0_0_0_3px_white,0_0_0_5px_hsl(var(--primary))]"
+                    : ""
                 )}
                 title="全部颜色"
               />
@@ -373,11 +373,11 @@ export default function Home() {
                   key={c.value}
                   onClick={() => setFilterColor(c.value)}
                   className={cn(
-                    "w-7 h-7 rounded-full border-2 transition-all hover:scale-110",
+                    "w-8 h-8 rounded-full transition-all hover:scale-110",
                     c.class,
                     filterColor === c.value
-                      ? "ring-2 ring-primary ring-offset-2"
-                      : "border-transparent"
+                      ? "shadow-[0_0_0_3px_white,0_0_0_5px_hsl(var(--primary))]"
+                      : ""
                   )}
                   title={c.label}
                 />
