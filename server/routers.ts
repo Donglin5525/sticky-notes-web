@@ -14,6 +14,7 @@ import {
   permanentlyDeleteNote,
   emptyTrash,
 } from "./db";
+import { storagePut } from "./storage";
 
 const noteColorSchema = z.enum(["yellow", "green", "blue", "pink", "purple", "orange"]);
 
@@ -142,6 +143,32 @@ export const appRouter = router({
       await emptyTrash(ctx.user.id);
       return { success: true };
     }),
+
+    /** Upload image for note */
+    uploadImage: protectedProcedure
+      .input(
+        z.object({
+          base64: z.string(),
+          filename: z.string(),
+          contentType: z.string(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const { base64, filename, contentType } = input;
+        
+        // Decode base64 to buffer
+        const buffer = Buffer.from(base64, "base64");
+        
+        // Generate unique filename
+        const timestamp = Date.now();
+        const ext = filename.split(".").pop() || "png";
+        const uniqueFilename = `notes/${ctx.user.id}/${timestamp}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        
+        // Upload to S3
+        const { url } = await storagePut(uniqueFilename, buffer, contentType);
+        
+        return { url };
+      }),
   }),
 });
 
