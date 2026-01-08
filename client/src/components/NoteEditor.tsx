@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { Note, NoteColor, noteColors, quadrantConfig, getQuadrant } from "@/types/note";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -13,15 +13,11 @@ import {
   AlertCircle,
   Clock,
   Check,
+  Palette,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 
 interface NoteEditorProps {
   note: Note;
@@ -30,13 +26,24 @@ interface NoteEditorProps {
   onDelete: (id: number) => void;
 }
 
-const colorMap = {
-  yellow: "bg-note-yellow",
-  green: "bg-note-green",
-  blue: "bg-note-blue",
-  pink: "bg-note-pink",
-  purple: "bg-note-purple",
-  orange: "bg-note-orange",
+// 顶部装饰条颜色
+const colorBarMap = {
+  yellow: "bg-amber-400",
+  green: "bg-emerald-400",
+  blue: "bg-sky-400",
+  pink: "bg-pink-400",
+  purple: "bg-violet-400",
+  orange: "bg-orange-400",
+};
+
+// 颜色选择器样式
+const colorPickerMap = {
+  yellow: "bg-amber-400",
+  green: "bg-emerald-400",
+  blue: "bg-sky-400",
+  pink: "bg-pink-400",
+  purple: "bg-violet-400",
+  orange: "bg-orange-400",
 };
 
 export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProps) {
@@ -99,22 +106,20 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
   });
 
   return (
-    <div
-      className={cn(
-        "flex flex-col h-full w-full rounded-2xl shadow-2xl overflow-hidden transition-colors duration-500",
-        colorMap[note.color]
-      )}
-    >
+    <div className="flex flex-col h-full w-full bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-200">
+      {/* 顶部颜色装饰条 */}
+      <div className={cn("h-2 w-full", colorBarMap[note.color])} />
+      
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-black/5 bg-white/20 backdrop-blur-sm">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50">
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-xs text-foreground/60">
+          <div className="flex items-center gap-2 text-xs text-gray-500">
             <Clock className="h-3 w-3" />
             <span>编辑于 {timeAgo}</span>
           </div>
           <span
             className={cn(
-              "px-2 py-0.5 rounded-full text-xs font-medium border",
+              "px-2 py-0.5 rounded-full text-xs font-medium",
               quadrantInfo.color,
               quadrantInfo.textColor
             )}
@@ -125,47 +130,40 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
 
         <div className="flex items-center gap-1">
           {/* Color Picker */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+          <Popover>
+            <PopoverTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 hover:bg-black/5"
+                className="h-8 w-8 hover:bg-gray-100"
+                title="选择颜色"
               >
-                <div
-                  className={cn(
-                    "w-4 h-4 rounded-full border border-black/10",
-                    colorMap[note.color]
-                  )}
-                />
+                <Palette className="h-4 w-4 text-gray-500" />
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="glass-panel border-none p-2"
-            >
-              <div className="grid grid-cols-3 gap-2">
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-auto p-3">
+              <p className="text-xs text-gray-500 mb-2">选择便签颜色</p>
+              <div className="flex gap-2">
                 {noteColors.map((c) => (
                   <button
                     key={c.value}
                     className={cn(
-                      "w-8 h-8 rounded-full border border-black/10 transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-primary/50",
-                      c.class,
-                      note.color === c.value &&
-                        "ring-2 ring-primary ring-offset-2"
+                      "w-7 h-7 rounded-full transition-transform hover:scale-110 focus:outline-none",
+                      colorPickerMap[c.value],
+                      note.color === c.value && "ring-2 ring-primary ring-offset-2"
                     )}
                     onClick={() => handleColorChange(c.value)}
                     title={c.label}
                   />
                 ))}
               </div>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            </PopoverContent>
+          </Popover>
 
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 hover:bg-destructive/10 text-destructive/70 hover:text-destructive"
+            className="h-8 w-8 hover:bg-red-50 text-gray-500 hover:text-red-500"
             onClick={handleDelete}
             title="删除便签"
           >
@@ -175,111 +173,113 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 hover:bg-black/5"
+            className="h-8 w-8 hover:bg-gray-100"
             onClick={onClose}
           >
-            <X className="h-5 w-5 text-foreground/70" />
+            <X className="h-5 w-5 text-gray-500" />
           </Button>
         </div>
       </div>
 
       {/* Content */}
-      <ScrollArea className="flex-1 p-6">
-        {/* Title */}
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="标题"
-          className="w-full bg-transparent border-none text-2xl font-bold placeholder:text-foreground/30 focus:outline-none mb-4 text-foreground/90"
-        />
+      <ScrollArea className="flex-1">
+        <div className="p-6">
+          {/* Title */}
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="标题"
+            className="w-full bg-transparent border-none text-2xl font-bold placeholder:text-gray-300 focus:outline-none mb-6 text-gray-800"
+          />
 
-        {/* Priority Toggles */}
-        <div className="flex flex-wrap gap-3 mb-6">
-          <button
-            onClick={handleImportantToggle}
-            className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all",
-              note.isImportant
-                ? "border-red-500 bg-red-500/10 text-red-600"
-                : "border-black/10 hover:border-red-500/50 text-foreground/60 hover:text-red-500"
-            )}
-          >
-            <AlertCircle className="h-4 w-4" />
-            <span className="text-sm font-medium">重要</span>
-            {note.isImportant && <Check className="h-4 w-4" />}
-          </button>
-          <button
-            onClick={handleUrgentToggle}
-            className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all",
-              note.isUrgent
-                ? "border-orange-500 bg-orange-500/10 text-orange-600"
-                : "border-black/10 hover:border-orange-500/50 text-foreground/60 hover:text-orange-500"
-            )}
-          >
-            <Clock className="h-4 w-4" />
-            <span className="text-sm font-medium">紧急</span>
-            {note.isUrgent && <Check className="h-4 w-4" />}
-          </button>
-        </div>
-
-        {/* Content */}
-        <textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          placeholder="开始输入..."
-          className="w-full min-h-[300px] bg-transparent border-none resize-none text-lg leading-relaxed placeholder:text-foreground/30 focus:outline-none text-foreground/80 font-sans"
-        />
-
-        {/* Tags Section */}
-        <div className="flex flex-wrap gap-2 mt-6 pt-6 border-t border-black/5">
-          <Tag className="h-4 w-4 text-foreground/50" />
-          {note.tags?.map((tag) => (
-            <Badge
-              key={tag}
-              variant="secondary"
-              className="bg-black/5 hover:bg-black/10 text-foreground/70 gap-1 pr-1"
+          {/* Priority Toggles */}
+          <div className="flex flex-wrap gap-3 mb-6">
+            <button
+              onClick={handleImportantToggle}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all",
+                note.isImportant
+                  ? "border-red-400 bg-red-50 text-red-600"
+                  : "border-gray-200 hover:border-red-300 text-gray-500 hover:text-red-500"
+              )}
             >
-              {tag}
-              <button
-                onClick={() => removeTag(tag)}
-                className="hover:text-destructive"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </Badge>
-          ))}
+              <AlertCircle className="h-4 w-4" />
+              <span className="text-sm font-medium">重要</span>
+              {note.isImportant && <Check className="h-4 w-4" />}
+            </button>
+            <button
+              onClick={handleUrgentToggle}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all",
+                note.isUrgent
+                  ? "border-orange-400 bg-orange-50 text-orange-600"
+                  : "border-gray-200 hover:border-orange-300 text-gray-500 hover:text-orange-500"
+              )}
+            >
+              <Clock className="h-4 w-4" />
+              <span className="text-sm font-medium">紧急</span>
+              {note.isUrgent && <Check className="h-4 w-4" />}
+            </button>
+          </div>
 
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 text-xs text-muted-foreground hover:text-primary px-2"
+          {/* Content */}
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            placeholder="开始输入..."
+            className="w-full min-h-[300px] bg-transparent border-none resize-none text-base leading-relaxed placeholder:text-gray-300 focus:outline-none text-gray-700"
+          />
+
+          {/* Tags Section */}
+          <div className="flex flex-wrap items-center gap-2 mt-6 pt-6 border-t border-gray-100">
+            <Tag className="h-4 w-4 text-gray-400" />
+            {note.tags?.map((tag) => (
+              <Badge
+                key={tag}
+                variant="secondary"
+                className="bg-gray-100 hover:bg-gray-200 text-gray-600 gap-1 pr-1"
               >
-                <Plus className="h-3 w-3 mr-1" /> 添加标签
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-48 p-2" align="start">
-              <div className="flex gap-2">
-                <Input
-                  value={newTag}
-                  onChange={(e) => setNewTag(e.target.value)}
-                  placeholder="新标签..."
-                  className="h-8 text-sm"
-                  onKeyDown={(e) => e.key === "Enter" && handleAddTag()}
-                />
-                <Button
-                  size="sm"
-                  className="h-8 w-8 p-0"
-                  onClick={handleAddTag}
+                {tag}
+                <button
+                  onClick={() => removeTag(tag)}
+                  className="hover:text-red-500 ml-1"
                 >
-                  <Plus className="h-4 w-4" />
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            ))}
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 text-xs text-gray-400 hover:text-primary px-2"
+                >
+                  <Plus className="h-3 w-3 mr-1" /> 添加标签
                 </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
+              </PopoverTrigger>
+              <PopoverContent className="w-48 p-2" align="start">
+                <div className="flex gap-2">
+                  <Input
+                    value={newTag}
+                    onChange={(e) => setNewTag(e.target.value)}
+                    placeholder="新标签..."
+                    className="h-8 text-sm"
+                    onKeyDown={(e) => e.key === "Enter" && handleAddTag()}
+                  />
+                  <Button
+                    size="sm"
+                    className="h-8 w-8 p-0"
+                    onClick={handleAddTag}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
         </div>
       </ScrollArea>
     </div>
