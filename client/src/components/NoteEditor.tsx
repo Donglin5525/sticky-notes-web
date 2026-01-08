@@ -1,9 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Note, NoteColor, noteColors, quadrantConfig, getQuadrant } from "@/types/note";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";
-import { ScrollArea } from "./ui/scroll-area";
 import { cn } from "@/lib/utils";
 import {
   X,
@@ -14,10 +13,19 @@ import {
   Clock,
   Check,
   Palette,
+  Eye,
+  Edit3,
+  Loader2,
+  Image as ImageIcon,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
+import MDEditor from "@uiw/react-md-editor";
+import "@uiw/react-md-editor/markdown-editor.css";
+import "@uiw/react-markdown-preview/markdown.css";
 
 interface NoteEditorProps {
   note: Note;
@@ -50,6 +58,13 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content || "");
   const [newTag, setNewTag] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+  const editorRef = useRef<HTMLDivElement>(null);
+
+  // Image upload mutation
+  const uploadImageMutation = trpc.notes.uploadImage.useMutation({
+    onError: () => toast.error("图片上传失败，请重试"),
+  });
 
   // Sync with note changes
   useEffect(() => {
@@ -66,6 +81,80 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
     }, 500);
     return () => clearTimeout(timer);
   }, [title, content, note.id, note.title, note.content, onUpdate]);
+
+  // Handle image paste
+  const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.startsWith("image/")) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (!file) continue;
+
+        setIsUploading(true);
+        try {
+          // Convert file to base64
+          const reader = new FileReader();
+          reader.onload = async () => {
+            const base64 = (reader.result as string).split(",")[1];
+            const result = await uploadImageMutation.mutateAsync({
+              base64,
+              filename: file.name || "pasted-image.png",
+              contentType: file.type,
+            });
+
+            // Insert markdown image syntax
+            const imageMarkdown = `![image](${result.url})`;
+            setContent((prev) => prev + "\n" + imageMarkdown + "\n");
+            toast.success("图片上传成功");
+          };
+          reader.readAsDataURL(file);
+        } catch (error) {
+          console.error("Image upload failed:", error);
+        } finally {
+          setIsUploading(false);
+        }
+        break;
+      }
+    }
+  }, [uploadImageMutation]);
+
+  // Handle file input for image upload
+  const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("请选择图片文件");
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = (reader.result as string).split(",")[1];
+        const result = await uploadImageMutation.mutateAsync({
+          base64,
+          filename: file.name,
+          contentType: file.type,
+        });
+
+        const imageMarkdown = `![${file.name}](${result.url})`;
+        setContent((prev) => prev + "\n" + imageMarkdown + "\n");
+        toast.success("图片上传成功");
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error("Image upload failed:", error);
+    } finally {
+      setIsUploading(false);
+      e.target.value = "";
+    }
+  }, [uploadImageMutation]);
 
   const handleColorChange = (color: NoteColor) => {
     onUpdate(note.id, { color });
@@ -111,9 +200,9 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
       <div className={cn("h-2 w-full", colorBarMap[note.color])} />
       
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-xs text-gray-500">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50/50">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 text-xs text-gray-500">
             <Clock className="h-3 w-3" />
             <span>编辑于 {timeAgo}</span>
           </div>
@@ -129,6 +218,32 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
         </div>
 
         <div className="flex items-center gap-1">
+          {/* Image Upload */}
+          <label className="cursor-pointer">
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageUpload}
+              disabled={isUploading}
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 hover:bg-gray-100"
+              title="上传图片"
+              asChild
+            >
+              <span>
+                {isUploading ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
+                ) : (
+                  <ImageIcon className="h-4 w-4 text-gray-500" />
+                )}
+              </span>
+            </Button>
+          </label>
+
           {/* Color Picker */}
           <Popover>
             <PopoverTrigger asChild>
@@ -182,106 +297,123 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
       </div>
 
       {/* Content */}
-      <ScrollArea className="flex-1">
-        <div className="p-6">
+      <div className="flex-1 flex flex-col overflow-hidden" ref={editorRef}>
+        <div className="px-4 pt-4 pb-2">
           {/* Title */}
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="标题"
-            className="w-full bg-transparent border-none text-2xl font-bold placeholder:text-gray-300 focus:outline-none mb-6 text-gray-800"
+            className="w-full bg-transparent border-none text-xl font-bold placeholder:text-gray-300 focus:outline-none mb-3 text-gray-800"
           />
 
           {/* Priority Toggles */}
-          <div className="flex flex-wrap gap-3 mb-6">
+          <div className="flex flex-wrap gap-2 mb-3">
             <button
               onClick={handleImportantToggle}
               className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all",
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 transition-all text-sm",
                 note.isImportant
                   ? "border-red-400 bg-red-50 text-red-600"
                   : "border-gray-200 hover:border-red-300 text-gray-500 hover:text-red-500"
               )}
             >
-              <AlertCircle className="h-4 w-4" />
-              <span className="text-sm font-medium">重要</span>
-              {note.isImportant && <Check className="h-4 w-4" />}
+              <AlertCircle className="h-3.5 w-3.5" />
+              <span className="font-medium">重要</span>
+              {note.isImportant && <Check className="h-3.5 w-3.5" />}
             </button>
             <button
               onClick={handleUrgentToggle}
               className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-all",
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 transition-all text-sm",
                 note.isUrgent
                   ? "border-orange-400 bg-orange-50 text-orange-600"
                   : "border-gray-200 hover:border-orange-300 text-gray-500 hover:text-orange-500"
               )}
             >
-              <Clock className="h-4 w-4" />
-              <span className="text-sm font-medium">紧急</span>
-              {note.isUrgent && <Check className="h-4 w-4" />}
+              <Clock className="h-3.5 w-3.5" />
+              <span className="font-medium">紧急</span>
+              {note.isUrgent && <Check className="h-3.5 w-3.5" />}
             </button>
           </div>
-
-          {/* Content */}
-          <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="开始输入..."
-            className="w-full min-h-[300px] bg-transparent border-none resize-none text-base leading-relaxed placeholder:text-gray-300 focus:outline-none text-gray-700"
-          />
-
-          {/* Tags Section */}
-          <div className="flex flex-wrap items-center gap-2 mt-6 pt-6 border-t border-gray-100">
-            <Tag className="h-4 w-4 text-gray-400" />
-            {note.tags?.map((tag) => (
-              <Badge
-                key={tag}
-                variant="secondary"
-                className="bg-gray-100 hover:bg-gray-200 text-gray-600 gap-1 pr-1"
-              >
-                {tag}
-                <button
-                  onClick={() => removeTag(tag)}
-                  className="hover:text-red-500 ml-1"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
-            ))}
-
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 text-xs text-gray-400 hover:text-primary px-2"
-                >
-                  <Plus className="h-3 w-3 mr-1" /> 添加标签
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-48 p-2" align="start">
-                <div className="flex gap-2">
-                  <Input
-                    value={newTag}
-                    onChange={(e) => setNewTag(e.target.value)}
-                    placeholder="新标签..."
-                    className="h-8 text-sm"
-                    onKeyDown={(e) => e.key === "Enter" && handleAddTag()}
-                  />
-                  <Button
-                    size="sm"
-                    className="h-8 w-8 p-0"
-                    onClick={handleAddTag}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
         </div>
-      </ScrollArea>
+
+        {/* Markdown Editor */}
+        <div 
+          className="flex-1 overflow-hidden px-4 pb-2"
+          onPaste={handlePaste}
+          data-color-mode="light"
+        >
+          <MDEditor
+            value={content}
+            onChange={(val) => setContent(val || "")}
+            preview="live"
+            height="100%"
+            visibleDragbar={false}
+            hideToolbar={false}
+            enableScroll={true}
+            textareaProps={{
+              placeholder: "支持 Markdown 语法，可直接粘贴图片...",
+            }}
+            className="!border-gray-200 !rounded-lg overflow-hidden"
+            style={{ 
+              minHeight: "200px",
+              height: "calc(100% - 80px)",
+            }}
+          />
+        </div>
+
+        {/* Tags Section */}
+        <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-t border-gray-100 bg-gray-50/30">
+          <Tag className="h-4 w-4 text-gray-400" />
+          {note.tags?.map((tag) => (
+            <Badge
+              key={tag}
+              variant="secondary"
+              className="bg-gray-100 hover:bg-gray-200 text-gray-600 gap-1 pr-1"
+            >
+              {tag}
+              <button
+                onClick={() => removeTag(tag)}
+                className="hover:text-red-500 ml-1"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          ))}
+
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 text-xs text-gray-400 hover:text-primary px-2"
+              >
+                <Plus className="h-3 w-3 mr-1" /> 添加标签
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-48 p-2" align="start">
+              <div className="flex gap-2">
+                <Input
+                  value={newTag}
+                  onChange={(e) => setNewTag(e.target.value)}
+                  placeholder="新标签..."
+                  className="h-8 text-sm"
+                  onKeyDown={(e) => e.key === "Enter" && handleAddTag()}
+                />
+                <Button
+                  size="sm"
+                  className="h-8 w-8 p-0"
+                  onClick={handleAddTag}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+      </div>
     </div>
   );
 }
