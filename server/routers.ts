@@ -13,6 +13,9 @@ import {
   restoreNote,
   permanentlyDeleteNote,
   emptyTrash,
+  renameTag,
+  deleteTag,
+  moveTag,
 } from "./db";
 import { storagePut } from "./storage";
 
@@ -168,6 +171,42 @@ export const appRouter = router({
         const { url } = await storagePut(uniqueFilename, buffer, contentType);
         
         return { url };
+      }),
+  }),
+
+  tags: router({
+    /** Rename a tag across all notes */
+    rename: protectedProcedure
+      .input(
+        z.object({
+          oldTag: z.string(),
+          newTag: z.string(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const result = await renameTag(ctx.user.id, input.oldTag, input.newTag);
+        return result;
+      }),
+
+    /** Delete a tag from all notes */
+    delete: protectedProcedure
+      .input(z.object({ tag: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await deleteTag(ctx.user.id, input.tag);
+        return result;
+      }),
+
+    /** Move a tag under another parent */
+    move: protectedProcedure
+      .input(
+        z.object({
+          tag: z.string(),
+          newParent: z.string().nullable(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const result = await moveTag(ctx.user.id, input.tag, input.newParent);
+        return result;
       }),
   }),
 });

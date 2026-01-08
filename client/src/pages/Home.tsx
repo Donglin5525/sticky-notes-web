@@ -22,7 +22,7 @@ import {
   User,
   Loader2,
 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -132,6 +132,32 @@ export default function Home() {
     onError: () => toast.error("清空失败，请重试"),
   });
 
+  // Tag management mutations
+  const renameTagMutation = trpc.tags.rename.useMutation({
+    onSuccess: () => {
+      utils.notes.list.invalidate();
+      toast.success("标签已重命名");
+    },
+    onError: () => toast.error("重命名失败，请重试"),
+  });
+
+  const deleteTagMutation = trpc.tags.delete.useMutation({
+    onSuccess: () => {
+      utils.notes.list.invalidate();
+      setFilterTag(null);
+      toast.success("标签已删除");
+    },
+    onError: () => toast.error("删除失败，请重试"),
+  });
+
+  const moveTagMutation = trpc.tags.move.useMutation({
+    onSuccess: () => {
+      utils.notes.list.invalidate();
+      toast.success("标签已移动");
+    },
+    onError: () => toast.error("移动失败，请重试"),
+  });
+
   // Filter notes
   const filteredNotes = useMemo(() => {
     let result = notes;
@@ -169,6 +195,22 @@ export default function Home() {
     return notes.find((n: Note) => n.id === selectedNoteId) || null;
   }, [notes, selectedNoteId]);
 
+  // Close editor handler
+  const closeEditor = useCallback(() => {
+    setSelectedNoteId(null);
+  }, []);
+
+  // ESC key listener to close editor
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && selectedNoteId) {
+        closeEditor();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedNoteId, closeEditor]);
+
   // Handlers
   const handleCreateNote = () => {
     createNoteMutation.mutate({
@@ -196,6 +238,18 @@ export default function Home() {
 
   const handlePermanentDelete = (id: number) => {
     permanentDeleteMutation.mutate({ id });
+  };
+
+  // Toggle note completion (move to/from "eliminate" quadrant)
+  const handleToggleComplete = (note: Note) => {
+    const isCurrentlyCompleted = !note.isImportant && !note.isUrgent;
+    if (isCurrentlyCompleted) {
+      // Move back to "do-first" (important and urgent)
+      handleUpdateNote(note.id, { isImportant: true, isUrgent: true });
+    } else {
+      // Move to "eliminate" (not important, not urgent)
+      handleUpdateNote(note.id, { isImportant: false, isUrgent: false });
+    }
   };
 
   // Auth loading state
@@ -302,7 +356,7 @@ export default function Home() {
             <h3 className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">
               颜色筛选
             </h3>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-5 gap-2 max-w-[180px]">
               <button
                 onClick={() => setFilterColor("all")}
                 className={cn(
@@ -341,6 +395,9 @@ export default function Home() {
                 tags={allTags}
                 selectedTag={filterTag}
                 onSelectTag={setFilterTag}
+                onRenameTag={(oldTag, newTag) => renameTagMutation.mutate({ oldTag, newTag })}
+                onDeleteTag={(tag) => deleteTagMutation.mutate({ tag })}
+                onMoveTag={(tag, newParent) => moveTagMutation.mutate({ tag, newParent })}
               />
             </div>
           )}
@@ -481,6 +538,7 @@ export default function Home() {
                 notes={filteredNotes as Note[]}
                 selectedNoteId={selectedNoteId}
                 onNoteClick={(note) => setSelectedNoteId(note.id)}
+                onToggleComplete={handleToggleComplete}
               />
             ) : (
               // List View
@@ -517,15 +575,15 @@ export default function Home() {
           {/* Editor Panel with Overlay */}
           {selectedNote && !showTrash && (
             <>
-              {/* Overlay to close editor when clicking outside */}
+              {/* Overlay to close editor when clicking outside - visible on all screens */}
               <div 
-                className="fixed inset-0 bg-black/20 z-40 lg:hidden"
-                onClick={() => setSelectedNoteId(null)}
+                className="fixed inset-0 bg-black/10 lg:bg-transparent z-40 lg:absolute lg:inset-auto lg:left-0 lg:top-0 lg:right-1/2 lg:bottom-0"
+                onClick={closeEditor}
               />
               <div className="fixed right-0 top-0 bottom-0 w-full sm:w-[480px] lg:relative lg:w-1/2 border-l border-border/50 bg-background z-50 lg:z-auto shadow-2xl lg:shadow-none">
                 <NoteEditor
                   note={selectedNote as Note}
-                  onClose={() => setSelectedNoteId(null)}
+                  onClose={closeEditor}
                   onUpdate={handleUpdateNote}
                   onDelete={handleDeleteNote}
                 />

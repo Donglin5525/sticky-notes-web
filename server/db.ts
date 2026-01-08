@@ -254,3 +254,70 @@ export async function emptyTrash(userId: number) {
   await db.delete(notes).where(and(eq(notes.userId, userId), eq(notes.isDeleted, true)));
   return true;
 }
+
+/** Rename a tag across all notes for a user */
+export async function renameTag(userId: number, oldTag: string, newTag: string) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("[Database] Cannot rename tag: database not available");
+  }
+
+  // Get all notes with the old tag
+  const userNotes = await getUserNotes(userId);
+  const notesToUpdate = userNotes.filter(note => {
+    const tags = note.tags ? JSON.parse(note.tags) : [];
+    return tags.some((t: string) => t === oldTag || t.startsWith(oldTag + "/"));
+  });
+
+  // Update each note
+  for (const note of notesToUpdate) {
+    const tags = note.tags ? JSON.parse(note.tags) : [];
+    const updatedTags = tags.map((t: string) => {
+      if (t === oldTag) return newTag;
+      if (t.startsWith(oldTag + "/")) return newTag + t.slice(oldTag.length);
+      return t;
+    });
+    await updateNote(note.id, userId, { tags: updatedTags });
+  }
+
+  return { updatedCount: notesToUpdate.length };
+}
+
+/** Delete a tag from all notes for a user */
+export async function deleteTag(userId: number, tagToDelete: string) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("[Database] Cannot delete tag: database not available");
+  }
+
+  // Get all notes with the tag
+  const userNotes = await getUserNotes(userId);
+  const notesToUpdate = userNotes.filter(note => {
+    const tags = note.tags ? JSON.parse(note.tags) : [];
+    return tags.some((t: string) => t === tagToDelete || t.startsWith(tagToDelete + "/"));
+  });
+
+  // Update each note
+  for (const note of notesToUpdate) {
+    const tags = note.tags ? JSON.parse(note.tags) : [];
+    const updatedTags = tags.filter((t: string) => t !== tagToDelete && !t.startsWith(tagToDelete + "/"));
+    await updateNote(note.id, userId, { tags: updatedTags });
+  }
+
+  return { updatedCount: notesToUpdate.length };
+}
+
+/** Move a tag under another parent tag */
+export async function moveTag(userId: number, tagToMove: string, newParent: string | null) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("[Database] Cannot move tag: database not available");
+  }
+
+  // Calculate the new tag path
+  const tagName = tagToMove.split("/").pop() || tagToMove;
+  const newTag = newParent ? `${newParent}/${tagName}` : tagName;
+
+  // Use rename function to do the actual work
+  return renameTag(userId, tagToMove, newTag);
+}
