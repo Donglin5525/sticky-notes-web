@@ -66,8 +66,34 @@ export default function Home() {
   });
 
   const updateNoteMutation = trpc.notes.update.useMutation({
-    onSuccess: () => utils.notes.list.invalidate(),
-    onError: () => toast.error("保存失败，请重试"),
+    onMutate: async (newData) => {
+      // Cancel outgoing refetches
+      await utils.notes.list.cancel();
+      
+      // Snapshot previous value
+      const previousNotes = utils.notes.list.getData();
+      
+      // Optimistically update
+      utils.notes.list.setData(undefined, (old) => {
+        if (!old) return old;
+        return old.map((note: Note) => 
+          note.id === newData.id ? { ...note, ...newData, updatedAt: Date.now() } : note
+        );
+      });
+      
+      return { previousNotes };
+    },
+    onError: (err, newData, context) => {
+      // Rollback on error
+      if (context?.previousNotes) {
+        utils.notes.list.setData(undefined, context.previousNotes);
+      }
+      toast.error("保存失败，请重试");
+    },
+    onSettled: () => {
+      // Always refetch after error or success
+      utils.notes.list.invalidate();
+    },
   });
 
   const deleteNoteMutation = trpc.notes.delete.useMutation({
@@ -493,7 +519,7 @@ export default function Home() {
                     </Button>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                  <div className="flex flex-col gap-2 max-w-3xl">
                     {filteredNotes.map((note: Note) => (
                       <NoteCard
                         key={note.id}
@@ -508,16 +534,23 @@ export default function Home() {
             )}
           </div>
 
-          {/* Editor Panel */}
+          {/* Editor Panel with Overlay */}
           {selectedNote && !showTrash && (
-            <div className="w-full lg:w-1/2 border-l border-border/50 bg-background/30">
-              <NoteEditor
-                note={selectedNote as Note}
-                onClose={() => setSelectedNoteId(null)}
-                onUpdate={handleUpdateNote}
-                onDelete={handleDeleteNote}
+            <>
+              {/* Overlay to close editor when clicking outside */}
+              <div 
+                className="fixed inset-0 bg-black/20 z-40 lg:hidden"
+                onClick={() => setSelectedNoteId(null)}
               />
-            </div>
+              <div className="fixed right-0 top-0 bottom-0 w-full sm:w-[480px] lg:relative lg:w-1/2 border-l border-border/50 bg-background z-50 lg:z-auto shadow-2xl lg:shadow-none">
+                <NoteEditor
+                  note={selectedNote as Note}
+                  onClose={() => setSelectedNoteId(null)}
+                  onUpdate={handleUpdateNote}
+                  onDelete={handleDeleteNote}
+                />
+              </div>
+            </>
           )}
         </div>
       </main>

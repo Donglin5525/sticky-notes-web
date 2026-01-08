@@ -60,42 +60,90 @@ export function NoteCard({
     <div
       onClick={onClick}
       className={cn(
-        "group relative flex flex-col p-4 rounded-xl cursor-pointer",
-        "bg-white border border-gray-200 shadow-sm",
+        "group relative flex items-center gap-4 px-4 py-3 rounded-lg cursor-pointer",
+        "bg-white border border-gray-200",
         "border-l-4",
         colorBorderMap[note.color],
         "transition-all duration-200",
         note.isDeleted 
           ? "opacity-70 grayscale-[0.3]" 
-          : "hover:-translate-y-1 hover:shadow-md hover:border-gray-300",
-        isSelected && "ring-2 ring-primary ring-offset-2 shadow-md",
+          : "hover:bg-gray-50 hover:border-gray-300",
+        isSelected && "bg-primary/5 border-primary/30 ring-1 ring-primary/20",
         className
       )}
     >
-      {/* Header with priority badges */}
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <h3 className={cn(
-          "font-semibold text-gray-800 line-clamp-2 flex-1",
-          !note.title && "text-gray-400 italic"
-        )}>
-          {note.title || "无标题"}
-        </h3>
-        
-        {/* Priority indicators - inside card */}
-        {(note.isImportant || note.isUrgent) && !note.isDeleted && (
-          <div className="flex gap-1 flex-shrink-0">
-            {note.isImportant && (
-              <span className="w-5 h-5 rounded-full bg-red-100 flex items-center justify-center" title="重要">
-                <AlertCircle className="w-3 h-3 text-red-500" />
-              </span>
-            )}
-            {note.isUrgent && (
-              <span className="w-5 h-5 rounded-full bg-orange-100 flex items-center justify-center" title="紧急">
-                <Clock className="w-3 h-3 text-orange-500" />
-              </span>
-            )}
-          </div>
+      {/* Priority indicators */}
+      <div className="flex gap-1 flex-shrink-0">
+        {note.isImportant && (
+          <span className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center" title="重要">
+            <AlertCircle className="w-3.5 h-3.5 text-red-500" />
+          </span>
         )}
+        {note.isUrgent && (
+          <span className="w-6 h-6 rounded-full bg-orange-100 flex items-center justify-center" title="紧急">
+            <Clock className="w-3.5 h-3.5 text-orange-500" />
+          </span>
+        )}
+        {!note.isImportant && !note.isUrgent && (
+          <span className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center">
+            <span className="w-2 h-2 rounded-full bg-gray-300" />
+          </span>
+        )}
+      </div>
+
+      {/* Main content */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-0.5">
+          <h3 className={cn(
+            "font-medium text-gray-800 truncate",
+            !note.title && "text-gray-400 italic"
+          )}>
+            {note.title || "无标题"}
+          </h3>
+          
+          {/* Tags inline */}
+          {note.tags && note.tags.length > 0 && (
+            <div className="hidden sm:flex gap-1 flex-shrink-0">
+              {note.tags.slice(0, 2).map((tag) => (
+                <Badge
+                  key={tag}
+                  variant="secondary"
+                  className="bg-gray-100 text-gray-500 text-[10px] h-4 px-1.5"
+                >
+                  {tag}
+                </Badge>
+              ))}
+              {note.tags.length > 2 && (
+                <Badge variant="secondary" className="bg-gray-100 text-gray-400 text-[10px] h-4 px-1">
+                  +{note.tags.length - 2}
+                </Badge>
+              )}
+            </div>
+          )}
+        </div>
+        
+        <p className="text-sm text-gray-500 truncate">
+          {plainContent || "暂无内容..."}
+        </p>
+      </div>
+
+      {/* Right side info */}
+      <div className="flex items-center gap-3 flex-shrink-0">
+        {/* Quadrant badge */}
+        {!note.isDeleted && (
+          <span className={cn(
+            "hidden md:inline-flex px-2 py-0.5 rounded text-[11px] font-medium",
+            config.color,
+            config.textColor
+          )}>
+            {config.label}
+          </span>
+        )}
+        
+        {/* Time */}
+        <span className="text-xs text-gray-400 whitespace-nowrap min-w-[70px] text-right">
+          {timeAgo}
+        </span>
 
         {/* Trash Actions */}
         {note.isDeleted && (
@@ -103,62 +151,22 @@ export function NoteCard({
             <Button
               size="icon"
               variant="ghost"
-              className="h-6 w-6 hover:bg-gray-100"
+              className="h-7 w-7 hover:bg-gray-100"
               onClick={handleRestore}
               title="恢复"
             >
-              <RotateCcw className="h-3 w-3" />
+              <RotateCcw className="h-3.5 w-3.5" />
             </Button>
             <Button
               size="icon"
               variant="ghost"
-              className="h-6 w-6 hover:bg-red-50 text-red-500"
+              className="h-7 w-7 hover:bg-red-50 text-red-500"
               onClick={handleDelete}
               title="永久删除"
             >
-              <X className="h-3 w-3" />
+              <X className="h-3.5 w-3.5" />
             </Button>
           </div>
-        )}
-      </div>
-
-      {/* Content Preview */}
-      <p className="text-sm text-gray-600 line-clamp-4 mb-3 flex-grow whitespace-pre-wrap">
-        {plainContent || "暂无内容..."}
-      </p>
-
-      {/* Tags */}
-      {note.tags && note.tags.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-3">
-          {note.tags.slice(0, 3).map((tag) => (
-            <Badge
-              key={tag}
-              variant="secondary"
-              className="bg-gray-100 text-gray-600 text-[10px] h-5 px-1.5"
-            >
-              <Tag className="w-2.5 h-2.5 mr-0.5" />
-              {tag}
-            </Badge>
-          ))}
-          {note.tags.length > 3 && (
-            <Badge variant="secondary" className="bg-gray-100 text-gray-500 text-[10px] h-5 px-1.5">
-              +{note.tags.length - 3}
-            </Badge>
-          )}
-        </div>
-      )}
-
-      {/* Footer */}
-      <div className="flex items-center justify-between text-xs text-gray-400 mt-auto pt-2 border-t border-gray-100">
-        <span>{timeAgo}</span>
-        {!note.isDeleted && (
-          <span className={cn(
-            "px-2 py-0.5 rounded-full text-[10px] font-medium",
-            config.color,
-            config.textColor
-          )}>
-            {config.label}
-          </span>
         )}
       </div>
     </div>
