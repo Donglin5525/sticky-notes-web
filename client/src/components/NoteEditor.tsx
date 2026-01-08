@@ -13,7 +13,6 @@ import {
   Clock,
   Check,
   Palette,
-  Eye,
   Edit3,
   Loader2,
   Image as ImageIcon,
@@ -59,7 +58,9 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
   const [content, setContent] = useState(note.content || "");
   const [newTag, setNewTag] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const [isEditing, setIsEditing] = useState(false); // 默认为预览模式
   const editorRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Image upload mutation
   const uploadImageMutation = trpc.notes.uploadImage.useMutation({
@@ -71,6 +72,13 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
     setTitle(note.title);
     setContent(note.content || "");
   }, [note.id, note.title, note.content]);
+
+  // 新建便签时自动进入编辑模式
+  useEffect(() => {
+    if (!note.title && !note.content) {
+      setIsEditing(true);
+    }
+  }, [note.id]);
 
   // Debounced save for title and content
   useEffect(() => {
@@ -218,31 +226,48 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
         </div>
 
         <div className="flex items-center gap-1">
-          {/* Image Upload */}
-          <label className="cursor-pointer">
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleImageUpload}
-              disabled={isUploading}
-            />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 hover:bg-gray-100"
-              title="上传图片"
-              asChild
-            >
-              <span>
-                {isUploading ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
-                ) : (
-                  <ImageIcon className="h-4 w-4 text-gray-500" />
-                )}
-              </span>
-            </Button>
-          </label>
+          {/* Edit/Preview Toggle */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              "h-8 w-8",
+              isEditing ? "bg-primary/10 text-primary" : "hover:bg-gray-100 text-gray-500"
+            )}
+            onClick={() => setIsEditing(!isEditing)}
+            title={isEditing ? "预览模式" : "编辑模式"}
+          >
+            <Edit3 className="h-4 w-4" />
+          </Button>
+
+          {/* Image Upload - only show in edit mode */}
+          {isEditing && (
+            <label className="cursor-pointer">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleImageUpload}
+                disabled={isUploading}
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 hover:bg-gray-100"
+                title="上传图片"
+                asChild
+              >
+                <span>
+                  {isUploading ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
+                  ) : (
+                    <ImageIcon className="h-4 w-4 text-gray-500" />
+                  )}
+                </span>
+              </Button>
+            </label>
+          )}
 
           {/* Color Picker */}
           <Popover>
@@ -300,13 +325,22 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
       <div className="flex-1 flex flex-col overflow-hidden" ref={editorRef}>
         <div className="px-4 pt-4 pb-2">
           {/* Title */}
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="标题"
-            className="w-full bg-transparent border-none text-xl font-bold placeholder:text-gray-300 focus:outline-none mb-3 text-gray-800"
-          />
+          {isEditing ? (
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="标题"
+              className="w-full bg-transparent border-none text-xl font-bold placeholder:text-gray-300 focus:outline-none mb-3 text-gray-800"
+            />
+          ) : (
+            <h2 
+              className="text-xl font-bold text-gray-800 mb-3 cursor-pointer hover:text-primary transition-colors"
+              onClick={() => setIsEditing(true)}
+            >
+              {title || "无标题"}
+            </h2>
+          )}
 
           {/* Priority Toggles */}
           <div className="flex flex-wrap gap-2 mb-3">
@@ -339,29 +373,42 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
           </div>
         </div>
 
-        {/* Markdown Editor */}
+        {/* Markdown Editor / Preview */}
         <div 
-          className="flex-1 overflow-hidden px-4 pb-2"
-          onPaste={handlePaste}
+          className="flex-1 overflow-auto px-4 pb-2"
+          onPaste={isEditing ? handlePaste : undefined}
           data-color-mode="light"
         >
-          <MDEditor
-            value={content}
-            onChange={(val) => setContent(val || "")}
-            preview="live"
-            height="100%"
-            visibleDragbar={false}
-            hideToolbar={false}
-            enableScroll={true}
-            textareaProps={{
-              placeholder: "支持 Markdown 语法，可直接粘贴图片...",
-            }}
-            className="!border-gray-200 !rounded-lg overflow-hidden"
-            style={{ 
-              minHeight: "200px",
-              height: "calc(100% - 80px)",
-            }}
-          />
+          {isEditing ? (
+            <MDEditor
+              value={content}
+              onChange={(val) => setContent(val || "")}
+              preview="edit"
+              height="100%"
+              visibleDragbar={false}
+              hideToolbar={false}
+              enableScroll={true}
+              textareaProps={{
+                placeholder: "支持 Markdown 语法，可直接粘贴图片...",
+              }}
+              className="!border-gray-200 !rounded-lg overflow-hidden"
+              style={{ 
+                minHeight: "200px",
+                height: "calc(100% - 20px)",
+              }}
+            />
+          ) : (
+            <div 
+              className="prose prose-sm max-w-none cursor-pointer min-h-[200px] p-4 rounded-lg border border-gray-100 hover:border-gray-200 transition-colors bg-gray-50/30"
+              onClick={() => setIsEditing(true)}
+            >
+              {content ? (
+                <MDEditor.Markdown source={content} />
+              ) : (
+                <p className="text-gray-400 italic">点击此处开始编辑...</p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Tags Section */}
@@ -398,7 +445,7 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
                 <Input
                   value={newTag}
                   onChange={(e) => setNewTag(e.target.value)}
-                  placeholder="新标签..."
+                  placeholder="新标签（如：工作/项目A）"
                   className="h-8 text-sm"
                   onKeyDown={(e) => e.key === "Enter" && handleAddTag()}
                 />
@@ -410,6 +457,9 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
+              <p className="text-xs text-gray-400 mt-2">
+                支持层级标签，用 / 分隔
+              </p>
             </PopoverContent>
           </Popover>
         </div>
