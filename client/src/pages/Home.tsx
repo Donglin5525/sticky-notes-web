@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { TagTree } from "@/components/TagTree";
 
 type ViewMode = "list" | "quadrant";
 
@@ -336,32 +337,11 @@ export default function Home() {
               <h3 className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">
                 标签
               </h3>
-              <div className="flex flex-wrap gap-1">
-                {filterTag && (
-                  <Badge
-                    variant="default"
-                    className="cursor-pointer"
-                    onClick={() => setFilterTag(null)}
-                  >
-                    <Tag className="h-3 w-3 mr-1" />
-                    {filterTag}
-                    <span className="ml-1">×</span>
-                  </Badge>
-                )}
-                {allTags
-                  .filter((t) => t !== filterTag)
-                  .map((tag) => (
-                    <Badge
-                      key={tag}
-                      variant="outline"
-                      className="cursor-pointer hover:bg-accent"
-                      onClick={() => setFilterTag(tag)}
-                    >
-                      <Tag className="h-3 w-3 mr-1" />
-                      {tag}
-                    </Badge>
-                  ))}
-              </div>
+              <TagTree
+                tags={allTags}
+                selectedTag={filterTag}
+                onSelectTag={setFilterTag}
+              />
             </div>
           )}
 
