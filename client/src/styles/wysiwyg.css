@@ -1,0 +1,190 @@
+/* WYSIWYG Editor Styles */
+
+.wysiwyg-editor {
+  width: 100%;
+  height: 100%;
+}
+
+.wysiwyg-editor .ProseMirror {
+  outline: none;
+  min-height: 200px;
+  padding: 0.5rem;
+}
+
+.wysiwyg-editor .ProseMirror p {
+  margin: 0.5em 0;
+}
+
+.wysiwyg-editor .ProseMirror:first-child {
+  margin-top: 0;
+}
+
+/* Placeholder styles */
+.wysiwyg-editor .ProseMirror.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: #9ca3af;
+  pointer-events: none;
+  height: 0;
+}
+
+/* Bullet list styles - 实心圆点 */
+.wysiwyg-editor .ProseMirror ul {
+  list-style-type: disc;
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}
+
+.wysiwyg-editor .ProseMirror ul li {
+  padding-left: 0.25em;
+  margin: 0.25em 0;
+}
+
+.wysiwyg-editor .ProseMirror ul li::marker {
+  color: #374151;
+  font-size: 1em;
+}
+
+/* Ordered list styles */
+.wysiwyg-editor .ProseMirror ol {
+  list-style-type: decimal;
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}
+
+.wysiwyg-editor .ProseMirror ol li {
+  padding-left: 0.25em;
+  margin: 0.25em 0;
+}
+
+/* Nested lists */
+.wysiwyg-editor .ProseMirror ul ul,
+.wysiwyg-editor .ProseMirror ol ul {
+  list-style-type: circle;
+}
+
+.wysiwyg-editor .ProseMirror ul ul ul,
+.wysiwyg-editor .ProseMirror ol ul ul {
+  list-style-type: square;
+}
+
+/* Headings */
+.wysiwyg-editor .ProseMirror h1 {
+  font-size: 1.75em;
+  font-weight: 700;
+  margin: 0.75em 0 0.5em;
+  line-height: 1.2;
+}
+
+.wysiwyg-editor .ProseMirror h2 {
+  font-size: 1.5em;
+  font-weight: 600;
+  margin: 0.75em 0 0.5em;
+  line-height: 1.3;
+}
+
+.wysiwyg-editor .ProseMirror h3 {
+  font-size: 1.25em;
+  font-weight: 600;
+  margin: 0.5em 0 0.25em;
+  line-height: 1.4;
+}
+
+/* Bold and Italic */
+.wysiwyg-editor .ProseMirror strong {
+  font-weight: 700;
+}
+
+.wysiwyg-editor .ProseMirror em {
+  font-style: italic;
+}
+
+/* Inline code */
+.wysiwyg-editor .ProseMirror code {
+  background-color: #f3f4f6;
+  padding: 0.125em 0.375em;
+  border-radius: 0.25em;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.875em;
+  color: #ef4444;
+}
+
+/* Code blocks */
+.wysiwyg-editor .ProseMirror pre {
+  background-color: #1f2937;
+  color: #f9fafb;
+  padding: 1em;
+  border-radius: 0.5em;
+  overflow-x: auto;
+  margin: 0.75em 0;
+}
+
+.wysiwyg-editor .ProseMirror pre code {
+  background: none;
+  padding: 0;
+  color: inherit;
+  font-size: 0.875em;
+}
+
+/* Blockquotes */
+.wysiwyg-editor .ProseMirror blockquote {
+  border-left: 3px solid #d1d5db;
+  padding-left: 1em;
+  margin: 0.75em 0;
+  color: #6b7280;
+  font-style: italic;
+}
+
+/* Images - 内联显示 */
+.wysiwyg-editor .ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5em;
+  margin: 0.5em 0;
+  display: block;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.wysiwyg-editor .ProseMirror img.ProseMirror-selectednode {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Horizontal rule */
+.wysiwyg-editor .ProseMirror hr {
+  border: none;
+  border-top: 2px solid #e5e7eb;
+  margin: 1em 0;
+}
+
+/* Links */
+.wysiwyg-editor .ProseMirror a {
+  color: #3b82f6;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.wysiwyg-editor .ProseMirror a:hover {
+  color: #2563eb;
+}
+
+/* Selection */
+.wysiwyg-editor .ProseMirror ::selection {
+  background-color: #bfdbfe;
+}
+
+/* Task lists (if needed) */
+.wysiwyg-editor .ProseMirror ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+}
+
+.wysiwyg-editor .ProseMirror ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5em;
+}
+
+.wysiwyg-editor .ProseMirror ul[data-type="taskList"] li input[type="checkbox"] {
+  margin-top: 0.25em;
+}
