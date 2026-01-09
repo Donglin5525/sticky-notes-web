@@ -13,7 +13,6 @@ import {
   Clock,
   Check,
   Palette,
-  Edit3,
   Loader2,
   Image as ImageIcon,
 } from "lucide-react";
@@ -22,9 +21,7 @@ import { zhCN } from "date-fns/locale";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import MDEditor from "@uiw/react-md-editor";
-import "@uiw/react-md-editor/markdown-editor.css";
-import "@uiw/react-markdown-preview/markdown.css";
+import { WysiwygEditor, WysiwygEditorRef } from "./WysiwygEditor";
 
 interface NoteEditorProps {
   note: Note;
@@ -58,8 +55,7 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
   const [content, setContent] = useState(note.content || "");
   const [newTag, setNewTag] = useState("");
   const [isUploading, setIsUploading] = useState(false);
-  const [isEditing, setIsEditing] = useState(false); // 默认为预览模式
-  const editorRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<WysiwygEditorRef>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Image upload mutation
@@ -73,10 +69,12 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
     setContent(note.content || "");
   }, [note.id, note.title, note.content]);
 
-  // 新建便签时自动进入编辑模式
+  // Auto focus editor for new notes
   useEffect(() => {
     if (!note.title && !note.content) {
-      setIsEditing(true);
+      setTimeout(() => {
+        editorRef.current?.focus();
+      }, 100);
     }
   }, [note.id]);
 
@@ -90,79 +88,54 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
     return () => clearTimeout(timer);
   }, [title, content, note.id, note.title, note.content, onUpdate]);
 
-  // Handle image paste
-  const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
+  // Handle image upload (for both paste and file input)
+  const handleImageUpload = useCallback(async (file: File): Promise<string> => {
+    if (!file.type.startsWith("image/")) {
+      toast.error("请选择图片文件");
+      return "";
+    }
 
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (item.type.startsWith("image/")) {
-        e.preventDefault();
-        const file = item.getAsFile();
-        if (!file) continue;
-
-        setIsUploading(true);
-        try {
-          // Convert file to base64
-          const reader = new FileReader();
-          reader.onload = async () => {
+    setIsUploading(true);
+    try {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = async () => {
+          try {
             const base64 = (reader.result as string).split(",")[1];
             const result = await uploadImageMutation.mutateAsync({
               base64,
               filename: file.name || "pasted-image.png",
               contentType: file.type,
             });
-
-            // Insert markdown image syntax
-            const imageMarkdown = `![image](${result.url})`;
-            setContent((prev) => prev + "\n" + imageMarkdown + "\n");
             toast.success("图片上传成功");
-          };
-          reader.readAsDataURL(file);
-        } catch (error) {
-          console.error("Image upload failed:", error);
-        } finally {
-          setIsUploading(false);
-        }
-        break;
-      }
+            resolve(result.url);
+          } catch (error) {
+            console.error("Image upload failed:", error);
+            resolve("");
+          } finally {
+            setIsUploading(false);
+          }
+        };
+        reader.readAsDataURL(file);
+      });
+    } catch (error) {
+      console.error("Image upload failed:", error);
+      setIsUploading(false);
+      return "";
     }
   }, [uploadImageMutation]);
 
   // Handle file input for image upload
-  const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileInputChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith("image/")) {
-      toast.error("请选择图片文件");
-      return;
+    const url = await handleImageUpload(file);
+    if (url && editorRef.current) {
+      editorRef.current.insertImage(url, file.name);
     }
-
-    setIsUploading(true);
-    try {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const base64 = (reader.result as string).split(",")[1];
-        const result = await uploadImageMutation.mutateAsync({
-          base64,
-          filename: file.name,
-          contentType: file.type,
-        });
-
-        const imageMarkdown = `![${file.name}](${result.url})`;
-        setContent((prev) => prev + "\n" + imageMarkdown + "\n");
-        toast.success("图片上传成功");
-      };
-      reader.readAsDataURL(file);
-    } catch (error) {
-      console.error("Image upload failed:", error);
-    } finally {
-      setIsUploading(false);
-      e.target.value = "";
-    }
-  }, [uploadImageMutation]);
+    e.target.value = "";
+  }, [handleImageUpload]);
 
   const handleColorChange = (color: NoteColor) => {
     onUpdate(note.id, { color });
@@ -193,6 +166,10 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
     onDelete(note.id);
     onClose();
   };
+
+  const handleContentChange = useCallback((newContent: string) => {
+    setContent(newContent);
+  }, []);
 
   const quadrant = getQuadrant(note);
   const quadrantInfo = quadrantConfig[quadrant];
@@ -226,48 +203,32 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
         </div>
 
         <div className="flex items-center gap-1">
-          {/* Edit/Preview Toggle */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn(
-              "h-8 w-8",
-              isEditing ? "bg-primary/10 text-primary" : "hover:bg-gray-100 text-gray-500"
-            )}
-            onClick={() => setIsEditing(!isEditing)}
-            title={isEditing ? "预览模式" : "编辑模式"}
-          >
-            <Edit3 className="h-4 w-4" />
-          </Button>
-
-          {/* Image Upload - only show in edit mode */}
-          {isEditing && (
-            <label className="cursor-pointer">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleImageUpload}
-                disabled={isUploading}
-              />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 hover:bg-gray-100"
-                title="上传图片"
-                asChild
-              >
-                <span>
-                  {isUploading ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
-                  ) : (
-                    <ImageIcon className="h-4 w-4 text-gray-500" />
-                  )}
-                </span>
-              </Button>
-            </label>
-          )}
+          {/* Image Upload */}
+          <label className="cursor-pointer">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileInputChange}
+              disabled={isUploading}
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 hover:bg-gray-100"
+              title="上传图片"
+              asChild
+            >
+              <span>
+                {isUploading ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
+                ) : (
+                  <ImageIcon className="h-4 w-4 text-gray-500" />
+                )}
+              </span>
+            </Button>
+          </label>
 
           {/* Color Picker */}
           <Popover>
@@ -322,25 +283,16 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
       </div>
 
       {/* Content */}
-      <div className="flex-1 flex flex-col overflow-hidden" ref={editorRef}>
+      <div className="flex-1 flex flex-col overflow-hidden">
         <div className="px-4 pt-4 pb-2">
           {/* Title */}
-          {isEditing ? (
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="标题"
-              className="w-full bg-transparent border-none text-xl font-bold placeholder:text-gray-300 focus:outline-none mb-3 text-gray-800"
-            />
-          ) : (
-            <h2 
-              className="text-xl font-bold text-gray-800 mb-3 cursor-pointer hover:text-primary transition-colors"
-              onClick={() => setIsEditing(true)}
-            >
-              {title || "无标题"}
-            </h2>
-          )}
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="标题"
+            className="w-full bg-transparent border-none text-xl font-bold placeholder:text-gray-300 focus:outline-none mb-3 text-gray-800"
+          />
 
           {/* Priority Toggles */}
           <div className="flex flex-wrap gap-2 mb-3">
@@ -373,42 +325,18 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
           </div>
         </div>
 
-        {/* Markdown Editor / Preview */}
-        <div 
-          className="flex-1 overflow-auto px-4 pb-2"
-          onPaste={isEditing ? handlePaste : undefined}
-          data-color-mode="light"
-        >
-          {isEditing ? (
-            <MDEditor
-              value={content}
-              onChange={(val) => setContent(val || "")}
-              preview="edit"
-              height="100%"
-              visibleDragbar={false}
-              hideToolbar={false}
-              enableScroll={true}
-              textareaProps={{
-                placeholder: "支持 Markdown 语法，可直接粘贴图片...",
-              }}
-              className="!border-gray-200 !rounded-lg overflow-hidden"
-              style={{ 
-                minHeight: "200px",
-                height: "calc(100% - 20px)",
-              }}
+        {/* WYSIWYG Editor */}
+        <div className="flex-1 overflow-auto px-4 pb-2">
+          <div className="border border-gray-200 rounded-lg overflow-hidden bg-white min-h-[200px]">
+            <WysiwygEditor
+              ref={editorRef}
+              content={content}
+              onChange={handleContentChange}
+              onImageUpload={handleImageUpload}
+              placeholder="支持 Markdown 语法，输入 - 空格 创建列表，可直接粘贴图片..."
+              className="min-h-[200px]"
             />
-          ) : (
-            <div 
-              className="prose prose-sm max-w-none cursor-pointer min-h-[200px] p-4 rounded-lg border border-gray-100 hover:border-gray-200 transition-colors bg-gray-50/30"
-              onClick={() => setIsEditing(true)}
-            >
-              {content ? (
-                <MDEditor.Markdown source={content} />
-              ) : (
-                <p className="text-gray-400 italic">点击此处开始编辑...</p>
-              )}
-            </div>
-          )}
+          </div>
         </div>
 
         {/* Tags Section */}
