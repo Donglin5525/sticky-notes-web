@@ -16,8 +16,7 @@ import {
   Loader2,
   Image as ImageIcon,
 } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
-import { zhCN } from "date-fns/locale";
+import { formatRelativeTime } from "@/lib/dateUtils";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -174,10 +173,7 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
   const quadrant = getQuadrant(note);
   const quadrantInfo = quadrantConfig[quadrant];
 
-  const timeAgo = formatDistanceToNow(new Date(note.updatedAt), {
-    addSuffix: true,
-    locale: zhCN,
-  });
+  const timeAgo = formatRelativeTime(note.updatedAt);
 
   return (
     <div className="flex flex-col h-full w-full bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-200">

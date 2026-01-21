@@ -2,8 +2,7 @@ import { Note, getQuadrant, quadrantConfig, Quadrant } from "@/types/note";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "./ui/scroll-area";
 import { Check, Clock, AlertCircle } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
-import { zhCN } from "date-fns/locale";
+import { formatRelativeTime } from "@/lib/dateUtils";
 import { Badge } from "./ui/badge";
 
 interface QuadrantViewProps {
@@ -42,10 +41,7 @@ function TodoItem({
   const quadrant = getQuadrant(note);
   const isCompleted = quadrant === "eliminate"; // 不重要不紧急视为已完成
   
-  const timeAgo = formatDistanceToNow(new Date(note.updatedAt), {
-    addSuffix: true,
-    locale: zhCN,
-  });
+  const timeAgo = formatRelativeTime(note.updatedAt);
 
   const handleCheckboxClick = (e: React.MouseEvent) => {
     e.stopPropagation();
