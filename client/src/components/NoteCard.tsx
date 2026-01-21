@@ -1,7 +1,6 @@
 import { cn } from "@/lib/utils";
 import { Note, getQuadrant, quadrantConfig } from "@/types/note";
-import { formatDistanceToNow } from "date-fns";
-import { zhCN } from "date-fns/locale";
+import { formatRelativeTime } from "@/lib/dateUtils";
 import { Clock, Tag, RotateCcw, X, AlertCircle } from "lucide-react";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
@@ -41,10 +40,7 @@ export function NoteCard({
     ? note.content.replace(/<[^>]*>/g, "").trim()
     : "";
   
-  const timeAgo = formatDistanceToNow(new Date(note.updatedAt), {
-    addSuffix: true,
-    locale: zhCN,
-  });
+  const timeAgo = formatRelativeTime(note.updatedAt);
 
   const handleRestore = (e: React.MouseEvent) => {
     e.stopPropagation();
