@@ -181,9 +181,37 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete, allTags = [], on
     onClose();
   };
 
+  // 提取内容中的 #标签
+  const extractTagsFromContent = useCallback((text: string): string[] => {
+    // 匹配 #标签 格式，支持中文、英文、数字、下划线、斜杠（用于层级标签）
+    const tagRegex = /#([\u4e00-\u9fa5a-zA-Z0-9_\/]+)/g;
+    const tags = new Set<string>();
+    let match;
+    while ((match = tagRegex.exec(text)) !== null) {
+      const tag = match[1].trim();
+      if (tag && tag.length > 0) {
+        tags.add(tag);
+      }
+    }
+    return Array.from(tags);
+  }, []);
+
   const handleContentChange = useCallback((newContent: string) => {
     setContent(newContent);
-  }, []);
+    
+    // 自动提取内容中的标签并添加到标签列表
+    const contentTags = extractTagsFromContent(newContent);
+    const currentTags = note.tags || [];
+    
+    // 找出内容中新出现的标签（不在当前标签列表中的）
+    const newTags = contentTags.filter(tag => !currentTags.includes(tag));
+    
+    // 如果有新标签，添加到标签列表
+    if (newTags.length > 0) {
+      const updatedTags = [...currentTags, ...newTags];
+      onUpdate(note.id, { tags: updatedTags });
+    }
+  }, [extractTagsFromContent, note.tags, note.id, onUpdate]);
 
   // Handle tag click from editor content
   const handleEditorTagClick = useCallback((tag: string) => {
