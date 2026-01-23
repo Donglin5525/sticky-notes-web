@@ -118,6 +118,7 @@ function TagNodeItem({
   onDeleteTag,
   onMoveTag,
   allTags,
+  isLast,
 }: {
   node: TagNode;
   level: number;
@@ -129,6 +130,7 @@ function TagNodeItem({
   onDeleteTag?: (tag: string) => void;
   onMoveTag?: (tag: string, newParent: string | null) => void;
   allTags: string[];
+  isLast?: boolean;
 }) {
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [showMoveDialog, setShowMoveDialog] = useState(false);
@@ -166,7 +168,31 @@ function TagNodeItem({
   };
 
   return (
-    <div>
+    <div className="relative">
+      {/* 树状连接线 - 垂直线 */}
+      {level > 0 && (
+        <div 
+          className="absolute border-l border-gray-300/50"
+          style={{ 
+            left: `${(level - 1) * 12 + 16}px`,
+            top: 0,
+            bottom: isLast ? '50%' : 0,
+            width: '1px'
+          }}
+        />
+      )}
+      {/* 树状连接线 - 水平线 */}
+      {level > 0 && (
+        <div 
+          className="absolute border-t border-gray-300/50"
+          style={{ 
+            left: `${(level - 1) * 12 + 16}px`,
+            top: '50%',
+            width: '10px',
+            height: '1px'
+          }}
+        />
+      )}
       <div className="group flex items-center">
         <button
           onClick={() => {
@@ -261,8 +287,8 @@ function TagNodeItem({
       </div>
       
       {hasChildren && isExpanded && (
-        <div>
-          {node.children.map((child) => (
+        <div className="relative">
+          {node.children.map((child, index) => (
             <TagNodeItem
               key={child.fullPath}
               node={child}
@@ -275,6 +301,7 @@ function TagNodeItem({
               onDeleteTag={onDeleteTag}
               onMoveTag={onMoveTag}
               allTags={allTags}
+              isLast={index === node.children.length - 1}
             />
           ))}
         </div>
