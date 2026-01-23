@@ -3,12 +3,16 @@ import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Extension } from "@tiptap/core";
-import { useEffect, forwardRef, useImperativeHandle } from "react";
+import { useEffect, forwardRef, useImperativeHandle, useState, useCallback, useRef } from "react";
+import { cn } from "@/lib/utils";
+import { Tag } from "lucide-react";
 
 interface WysiwygEditorProps {
   content: string;
   onChange: (content: string) => void;
   onImageUpload?: (file: File) => Promise<string>;
+  onTagClick?: (tag: string) => void;
+  allTags?: string[];
   placeholder?: string;
   className?: string;
   editable?: boolean;
@@ -18,6 +22,7 @@ export interface WysiwygEditorRef {
   editor: Editor | null;
   insertImage: (url: string, alt?: string) => void;
   focus: () => void;
+  insertTag: (tag: string) => void;
 }
 
 // Custom extension for markdown-like input rules
@@ -29,8 +34,74 @@ const MarkdownShortcuts = Extension.create({
   },
 });
 
+// Tag suggestion dropdown component
+function TagSuggestions({
+  tags,
+  selectedIndex,
+  onSelect,
+  position,
+}: {
+  tags: string[];
+  selectedIndex: number;
+  onSelect: (tag: string) => void;
+  position: { top: number; left: number };
+}) {
+  if (tags.length === 0) return null;
+
+  return (
+    <div
+      className="absolute z-50 bg-white border border-gray-200 rounded-lg shadow-lg py-1 max-h-48 overflow-auto min-w-[160px]"
+      style={{ top: position.top, left: position.left }}
+    >
+      {tags.map((tag, index) => (
+        <div
+          key={tag}
+          className={cn(
+            "flex items-center gap-2 px-3 py-1.5 cursor-pointer text-sm",
+            index === selectedIndex ? "bg-primary/10 text-primary" : "hover:bg-gray-50"
+          )}
+          onClick={() => onSelect(tag)}
+        >
+          <Tag className="h-3 w-3 text-gray-400" />
+          <span>{tag}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export const WysiwygEditor = forwardRef<WysiwygEditorRef, WysiwygEditorProps>(
-  ({ content, onChange, onImageUpload, placeholder = "开始输入...", className = "", editable = true }, ref) => {
+  ({ content, onChange, onImageUpload, onTagClick, allTags = [], placeholder = "开始输入...", className = "", editable = true }, ref) => {
+    const [showTagSuggestions, setShowTagSuggestions] = useState(false);
+    const [tagQuery, setTagQuery] = useState("");
+    const [selectedTagIndex, setSelectedTagIndex] = useState(0);
+    const [suggestionPosition, setSuggestionPosition] = useState({ top: 0, left: 0 });
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    // Filter tags based on query
+    const filteredTags = allTags.filter((tag) =>
+      tag.toLowerCase().includes(tagQuery.toLowerCase())
+    );
+
+    // Handle tag selection
+    const handleSelectTag = useCallback((tag: string) => {
+      if (editor) {
+        // Delete the # and query text
+        const { state } = editor;
+        const { selection } = state;
+        const from = selection.from - tagQuery.length - 1; // -1 for the #
+        const to = selection.from;
+        
+        editor.chain()
+          .focus()
+          .deleteRange({ from, to })
+          .insertContent(`#${tag} `)
+          .run();
+      }
+      setShowTagSuggestions(false);
+      setTagQuery("");
+    }, [tagQuery]);
+
     const editor = useEditor({
       extensions: [
         StarterKit.configure({
@@ -80,12 +151,63 @@ export const WysiwygEditor = forwardRef<WysiwygEditorRef, WysiwygEditorProps>(
         const html = editor.getHTML();
         const markdown = convertHtmlToMarkdown(html);
         onChange(markdown);
+        
+        // Check for # tag input
+        const { state } = editor;
+        const { selection } = state;
+        const { $from } = selection;
+        
+        // Get text before cursor
+        const textBefore = $from.parent.textContent.slice(0, $from.parentOffset);
+        const hashMatch = textBefore.match(/#([^\s#]*)$/);
+        
+        if (hashMatch) {
+          setTagQuery(hashMatch[1]);
+          setShowTagSuggestions(true);
+          setSelectedTagIndex(0);
+          
+          // Calculate position for suggestions dropdown
+          const coords = editor.view.coordsAtPos(selection.from);
+          if (containerRef.current) {
+            const containerRect = containerRef.current.getBoundingClientRect();
+            setSuggestionPosition({
+              top: coords.bottom - containerRect.top + 4,
+              left: coords.left - containerRect.left,
+            });
+          }
+        } else {
+          setShowTagSuggestions(false);
+          setTagQuery("");
+        }
       },
       editorProps: {
         attributes: {
           class: "wysiwyg-editor-content focus:outline-none min-h-[200px] prose prose-sm max-w-none",
         },
         handleKeyDown: (view, event) => {
+          // Handle tag suggestions navigation
+          if (showTagSuggestions && filteredTags.length > 0) {
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              setSelectedTagIndex((prev) => (prev + 1) % filteredTags.length);
+              return true;
+            }
+            if (event.key === "ArrowUp") {
+              event.preventDefault();
+              setSelectedTagIndex((prev) => (prev - 1 + filteredTags.length) % filteredTags.length);
+              return true;
+            }
+            if (event.key === "Enter" || event.key === "Tab") {
+              event.preventDefault();
+              handleSelectTag(filteredTags[selectedTagIndex]);
+              return true;
+            }
+            if (event.key === "Escape") {
+              setShowTagSuggestions(false);
+              return true;
+            }
+          }
+
           const { state } = view;
           const { selection } = state;
           const { $from, empty } = selection;
@@ -110,6 +232,20 @@ export const WysiwygEditor = forwardRef<WysiwygEditorRef, WysiwygEditorProps>(
             }
           }
           
+          return false;
+        },
+        handleClick: (view, pos, event) => {
+          // Check if clicked on a tag
+          const target = event.target as HTMLElement;
+          if (target.classList.contains("tag-link") || target.closest(".tag-link")) {
+            const tagElement = target.classList.contains("tag-link") ? target : target.closest(".tag-link");
+            const tag = tagElement?.getAttribute("data-tag");
+            if (tag && onTagClick) {
+              event.preventDefault();
+              onTagClick(tag);
+              return true;
+            }
+          }
           return false;
         },
         handlePaste: (view, event) => {
@@ -150,6 +286,11 @@ export const WysiwygEditor = forwardRef<WysiwygEditorRef, WysiwygEditorProps>(
           editor.commands.focus();
         }
       },
+      insertTag: (tag: string) => {
+        if (editor) {
+          editor.chain().focus().insertContent(`#${tag} `).run();
+        }
+      },
     }));
 
     // Update content when prop changes (only if different)
@@ -170,9 +311,28 @@ export const WysiwygEditor = forwardRef<WysiwygEditorRef, WysiwygEditorProps>(
       }
     }, [editable, editor]);
 
+    // Close suggestions when clicking outside
+    useEffect(() => {
+      const handleClickOutside = (e: MouseEvent) => {
+        if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+          setShowTagSuggestions(false);
+        }
+      };
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
     return (
-      <div className={`wysiwyg-editor ${className}`}>
+      <div ref={containerRef} className={`wysiwyg-editor relative ${className}`}>
         <EditorContent editor={editor} />
+        {showTagSuggestions && (
+          <TagSuggestions
+            tags={filteredTags}
+            selectedIndex={selectedTagIndex}
+            onSelect={handleSelectTag}
+            position={suggestionPosition}
+          />
+        )}
       </div>
     );
   }
@@ -305,6 +465,9 @@ function processInlineElements(text: string): string {
   // Links
   text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
   
+  // Tags - convert #tag to clickable span
+  text = text.replace(/#([^\s#]+)/g, '<span class="tag-link text-primary cursor-pointer hover:underline" data-tag="$1">#$1</span>');
+  
   // Bold and italic combined
   text = text.replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>");
   text = text.replace(/___(.+?)___/g, "<strong><em>$1</em></strong>");
@@ -341,6 +504,9 @@ function convertHtmlToMarkdown(html: string): string {
   if (!html || html === "<p></p>") return "";
   
   let markdown = html;
+  
+  // Convert tag links back to plain tags
+  markdown = markdown.replace(/<span[^>]*class="tag-link[^"]*"[^>]*data-tag="([^"]*)"[^>]*>#[^<]*<\/span>/gi, "#$1");
   
   // Convert images
   markdown = markdown.replace(/<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"[^>]*\/?>/gi, "![$2]($1)");

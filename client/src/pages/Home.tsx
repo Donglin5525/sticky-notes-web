@@ -586,6 +586,11 @@ export default function Home() {
                   onClose={closeEditor}
                   onUpdate={handleUpdateNote}
                   onDelete={handleDeleteNote}
+                  allTags={allTags}
+                  onTagClick={(tag) => {
+                    setFilterTag(tag);
+                    closeEditor();
+                  }}
                 />
               </div>
             </>
