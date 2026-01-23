@@ -21,12 +21,15 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { WysiwygEditor, WysiwygEditorRef } from "./WysiwygEditor";
+import { TagSelector } from "./TagSelector";
 
 interface NoteEditorProps {
   note: Note;
   onClose: () => void;
   onUpdate: (id: number, updates: Partial<Note>) => void;
   onDelete: (id: number) => void;
+  allTags?: string[];
+  onTagClick?: (tag: string) => void;
 }
 
 // 顶部装饰条颜色
@@ -49,11 +52,12 @@ const colorPickerMap = {
   orange: "bg-orange-400",
 };
 
-export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProps) {
+export function NoteEditor({ note, onClose, onUpdate, onDelete, allTags = [], onTagClick }: NoteEditorProps) {
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content || "");
   const [newTag, setNewTag] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const [tagSelectorOpen, setTagSelectorOpen] = useState(false);
   const editorRef = useRef<WysiwygEditorRef>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -156,6 +160,17 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
     }
   };
 
+  const handleToggleTag = (tag: string) => {
+    const currentTags = note.tags || [];
+    if (currentTags.includes(tag)) {
+      // Remove tag
+      onUpdate(note.id, { tags: currentTags.filter((t) => t !== tag) });
+    } else {
+      // Add tag
+      onUpdate(note.id, { tags: [...currentTags, tag] });
+    }
+  };
+
   const removeTag = (tagToRemove: string) => {
     const updatedTags = note.tags?.filter((tag) => tag !== tagToRemove) || [];
     onUpdate(note.id, { tags: updatedTags });
@@ -169,6 +184,14 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
   const handleContentChange = useCallback((newContent: string) => {
     setContent(newContent);
   }, []);
+
+  // Handle tag click from editor content
+  const handleEditorTagClick = useCallback((tag: string) => {
+    if (onTagClick) {
+      onTagClick(tag);
+      onClose();
+    }
+  }, [onTagClick, onClose]);
 
   const quadrant = getQuadrant(note);
   const quadrantInfo = quadrantConfig[quadrant];
@@ -329,7 +352,9 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
               content={content}
               onChange={handleContentChange}
               onImageUpload={handleImageUpload}
-              placeholder="支持 Markdown 语法，输入 - 空格 创建列表，可直接粘贴图片..."
+              onTagClick={handleEditorTagClick}
+              allTags={allTags}
+              placeholder="支持 Markdown 语法，输入 - 空格 创建列表，输入 # 插入标签..."
               className="min-h-[200px]"
             />
           </div>
@@ -337,16 +362,47 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
 
         {/* Tags Section */}
         <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-t border-gray-100 bg-gray-50/30">
-          <Tag className="h-4 w-4 text-gray-400" />
+          {/* Tag Selector Button */}
+          <Popover open={tagSelectorOpen} onOpenChange={setTagSelectorOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "h-7 w-7 hover:bg-gray-100",
+                  tagSelectorOpen && "bg-primary/10 text-primary"
+                )}
+                title="选择标签"
+              >
+                <Tag className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-64 p-0">
+              <div className="p-2 border-b">
+                <p className="text-sm font-medium">选择已有标签</p>
+              </div>
+              <TagSelector
+                allTags={allTags}
+                selectedTags={note.tags || []}
+                onToggleTag={handleToggleTag}
+              />
+            </PopoverContent>
+          </Popover>
+
+          {/* Current Tags */}
           {note.tags?.map((tag) => (
             <Badge
               key={tag}
               variant="secondary"
-              className="bg-gray-100 hover:bg-gray-200 text-gray-600 gap-1 pr-1"
+              className="bg-gray-100 hover:bg-gray-200 text-gray-600 gap-1 pr-1 cursor-pointer"
+              onClick={() => onTagClick?.(tag)}
             >
               {tag}
               <button
-                onClick={() => removeTag(tag)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeTag(tag);
+                }}
                 className="hover:text-red-500 ml-1"
               >
                 <X className="h-3 w-3" />
@@ -354,6 +410,7 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
             </Badge>
           ))}
 
+          {/* Add New Tag */}
           <Popover>
             <PopoverTrigger asChild>
               <Button
@@ -364,7 +421,7 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
                 <Plus className="h-3 w-3 mr-1" /> 添加标签
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-48 p-2" align="start">
+            <PopoverContent className="w-56 p-2" align="start">
               <div className="flex gap-2">
                 <Input
                   value={newTag}
