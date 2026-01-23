@@ -346,8 +346,36 @@ function TagNodeItem({
   );
 }
 
+// 获取所有需要展开的路径（所有有子节点的标签）
+function getAllExpandablePaths(tags: string[]): Set<string> {
+  const paths = new Set<string>();
+  tags.forEach(tag => {
+    const parts = tag.split("/");
+    let currentPath = "";
+    // 添加除最后一级外的所有父级路径
+    parts.forEach((part, index) => {
+      currentPath = currentPath ? `${currentPath}/${part}` : part;
+      if (index < parts.length - 1) {
+        paths.add(currentPath);
+      }
+    });
+  });
+  return paths;
+}
+
 export function TagTree({ tags, selectedTag, onSelectTag, onRenameTag, onDeleteTag, onMoveTag }: TagTreeProps) {
-  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
+  // 默认展开所有层级
+  const allExpandablePaths = useMemo(() => getAllExpandablePaths(tags), [tags]);
+  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(allExpandablePaths);
+
+  // 当标签列表变化时，更新展开状态以包含新的可展开路径
+  useMemo(() => {
+    setExpandedPaths(prev => {
+      const next = new Set(prev);
+      allExpandablePaths.forEach(p => next.add(p));
+      return next;
+    });
+  }, [allExpandablePaths]);
 
   const tagTree = useMemo(() => buildTagTree(tags), [tags]);
 
