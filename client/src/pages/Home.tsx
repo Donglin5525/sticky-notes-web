@@ -329,20 +329,20 @@ export default function Home() {
             <h3 className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">
               视图模式
             </h3>
-            <div className="flex gap-2">
+            <div className="flex rounded-lg overflow-hidden border border-border">
               <Button
-                variant={viewMode === "list" ? "default" : "outline"}
+                variant={viewMode === "list" ? "default" : "ghost"}
                 size="sm"
-                className="flex-1 gap-1"
+                className="flex-1 gap-1 rounded-none border-0"
                 onClick={() => setViewMode("list")}
               >
                 <List className="h-4 w-4" />
                 列表
               </Button>
               <Button
-                variant={viewMode === "quadrant" ? "default" : "outline"}
+                variant={viewMode === "quadrant" ? "default" : "ghost"}
                 size="sm"
-                className="flex-1 gap-1"
+                className="flex-1 gap-1 rounded-none border-0"
                 onClick={() => setViewMode("quadrant")}
               >
                 <Grid3X3 className="h-4 w-4" />
