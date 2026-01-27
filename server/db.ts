@@ -1,6 +1,11 @@
-import { eq, and, desc, asc } from "drizzle-orm";
+import { eq, and, desc, asc, gte, lt, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, notes, InsertNote, Note } from "../drizzle/schema";
+import { 
+  InsertUser, users, notes, InsertNote, Note,
+  dailyTasks, InsertDailyTask, DailyTask, TaskQuadrant,
+  dailySummaries, InsertDailySummary, DailySummary,
+  promptTemplates, InsertPromptTemplate, PromptTemplate
+} from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -320,4 +325,460 @@ export async function moveTag(userId: number, tagToMove: string, newParent: stri
 
   // Use rename function to do the actual work
   return renameTag(userId, tagToMove, newTag);
+}
+
+// ==================== Daily Tasks CRUD ====================
+
+/** Get tasks for a specific date */
+export async function getTasksByDate(userId: number, date: string) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get tasks: database not available");
+    return [];
+  }
+
+  const result = await db
+    .select()
+    .from(dailyTasks)
+    .where(and(eq(dailyTasks.userId, userId), eq(dailyTasks.taskDate, date)))
+    .orderBy(asc(dailyTasks.sortOrder), desc(dailyTasks.createdAt));
+
+  return result;
+}
+
+/** Get incomplete tasks from previous days (for carry-over prompt) */
+export async function getIncompletePreviousTasks(userId: number, beforeDate: string) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get incomplete tasks: database not available");
+    return [];
+  }
+
+  const result = await db
+    .select()
+    .from(dailyTasks)
+    .where(
+      and(
+        eq(dailyTasks.userId, userId),
+        eq(dailyTasks.isCompleted, false),
+        lt(dailyTasks.taskDate, beforeDate)
+      )
+    )
+    .orderBy(desc(dailyTasks.taskDate));
+
+  return result;
+}
+
+/** Create a new task */
+export async function createTask(data: {
+  userId: number;
+  title: string;
+  quadrant: TaskQuadrant;
+  taskDate: string;
+  notes?: string;
+  isCarriedOver?: boolean;
+  originalDate?: string;
+}) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("[Database] Cannot create task: database not available");
+  }
+
+  const now = Date.now();
+  const insertData: InsertDailyTask = {
+    userId: data.userId,
+    title: data.title,
+    quadrant: data.quadrant,
+    taskDate: data.taskDate,
+    notes: data.notes || null,
+    isCompleted: false,
+    isCarriedOver: data.isCarriedOver || false,
+    originalDate: data.originalDate || null,
+    sortOrder: 0,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const result = await db.insert(dailyTasks).values(insertData);
+  const insertId = result[0].insertId;
+
+  const newTask = await db
+    .select()
+    .from(dailyTasks)
+    .where(eq(dailyTasks.id, insertId))
+    .limit(1);
+
+  return newTask[0];
+}
+
+/** Update a task */
+export async function updateTask(
+  taskId: number,
+  userId: number,
+  updates: {
+    title?: string;
+    quadrant?: TaskQuadrant;
+    isCompleted?: boolean;
+    notes?: string;
+    sortOrder?: number;
+  }
+) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("[Database] Cannot update task: database not available");
+  }
+
+  const updateData: Partial<InsertDailyTask> = {
+    updatedAt: Date.now(),
+  };
+
+  if (updates.title !== undefined) updateData.title = updates.title;
+  if (updates.quadrant !== undefined) updateData.quadrant = updates.quadrant;
+  if (updates.isCompleted !== undefined) updateData.isCompleted = updates.isCompleted;
+  if (updates.notes !== undefined) updateData.notes = updates.notes;
+  if (updates.sortOrder !== undefined) updateData.sortOrder = updates.sortOrder;
+
+  await db
+    .update(dailyTasks)
+    .set(updateData)
+    .where(and(eq(dailyTasks.id, taskId), eq(dailyTasks.userId, userId)));
+
+  const updated = await db
+    .select()
+    .from(dailyTasks)
+    .where(eq(dailyTasks.id, taskId))
+    .limit(1);
+
+  return updated[0];
+}
+
+/** Delete a task */
+export async function deleteTask(taskId: number, userId: number) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("[Database] Cannot delete task: database not available");
+  }
+
+  await db.delete(dailyTasks).where(and(eq(dailyTasks.id, taskId), eq(dailyTasks.userId, userId)));
+  return true;
+}
+
+/** Carry over incomplete tasks to a new date */
+export async function carryOverTasks(userId: number, taskIds: number[], newDate: string) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("[Database] Cannot carry over tasks: database not available");
+  }
+
+  const now = Date.now();
+  const results: DailyTask[] = [];
+
+  for (const taskId of taskIds) {
+    // Get original task
+    const original = await db
+      .select()
+      .from(dailyTasks)
+      .where(and(eq(dailyTasks.id, taskId), eq(dailyTasks.userId, userId)))
+      .limit(1);
+
+    if (original.length === 0) continue;
+
+    const task = original[0];
+
+    // Create new task for the new date
+    const newTask = await createTask({
+      userId,
+      title: task.title,
+      quadrant: task.quadrant as TaskQuadrant,
+      taskDate: newDate,
+      notes: task.notes || undefined,
+      isCarriedOver: true,
+      originalDate: task.originalDate || task.taskDate,
+    });
+
+    // Mark original task as completed (carried over)
+    await db
+      .update(dailyTasks)
+      .set({ isCompleted: true, updatedAt: now })
+      .where(eq(dailyTasks.id, taskId));
+
+    results.push(newTask);
+  }
+
+  return results;
+}
+
+// ==================== Daily Summaries CRUD ====================
+
+/** Get summary for a specific date */
+export async function getSummaryByDate(userId: number, date: string) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get summary: database not available");
+    return null;
+  }
+
+  const result = await db
+    .select()
+    .from(dailySummaries)
+    .where(and(eq(dailySummaries.userId, userId), eq(dailySummaries.summaryDate, date)))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : null;
+}
+
+/** Create or update summary for a date */
+export async function upsertSummary(data: {
+  userId: number;
+  summaryDate: string;
+  reflection?: string;
+  tomorrowPlan?: string;
+  aiAnalysis?: string;
+}) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("[Database] Cannot upsert summary: database not available");
+  }
+
+  const now = Date.now();
+  const existing = await getSummaryByDate(data.userId, data.summaryDate);
+
+  if (existing) {
+    // Update existing
+    const updateData: Partial<InsertDailySummary> = {
+      updatedAt: now,
+    };
+    if (data.reflection !== undefined) updateData.reflection = data.reflection;
+    if (data.tomorrowPlan !== undefined) updateData.tomorrowPlan = data.tomorrowPlan;
+    if (data.aiAnalysis !== undefined) updateData.aiAnalysis = data.aiAnalysis;
+
+    await db
+      .update(dailySummaries)
+      .set(updateData)
+      .where(eq(dailySummaries.id, existing.id));
+
+    return getSummaryByDate(data.userId, data.summaryDate);
+  } else {
+    // Create new
+    const insertData: InsertDailySummary = {
+      userId: data.userId,
+      summaryDate: data.summaryDate,
+      reflection: data.reflection || null,
+      tomorrowPlan: data.tomorrowPlan || null,
+      aiAnalysis: data.aiAnalysis || null,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await db.insert(dailySummaries).values(insertData);
+    return getSummaryByDate(data.userId, data.summaryDate);
+  }
+}
+
+/** Get summaries for a date range (for history view) */
+export async function getSummariesInRange(userId: number, startDate: string, endDate: string) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get summaries: database not available");
+    return [];
+  }
+
+  const result = await db
+    .select()
+    .from(dailySummaries)
+    .where(
+      and(
+        eq(dailySummaries.userId, userId),
+        gte(dailySummaries.summaryDate, startDate),
+        lt(dailySummaries.summaryDate, endDate)
+      )
+    )
+    .orderBy(desc(dailySummaries.summaryDate));
+
+  return result;
+}
+
+/** Get task statistics for a date range */
+export async function getTaskStats(userId: number, startDate: string, endDate: string) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get task stats: database not available");
+    return { total: 0, completed: 0, byQuadrant: {} };
+  }
+
+  const tasks = await db
+    .select()
+    .from(dailyTasks)
+    .where(
+      and(
+        eq(dailyTasks.userId, userId),
+        gte(dailyTasks.taskDate, startDate),
+        lt(dailyTasks.taskDate, endDate)
+      )
+    );
+
+  const total = tasks.length;
+  const completed = tasks.filter(t => t.isCompleted).length;
+  const byQuadrant: Record<string, { total: number; completed: number }> = {};
+
+  for (const task of tasks) {
+    if (!byQuadrant[task.quadrant]) {
+      byQuadrant[task.quadrant] = { total: 0, completed: 0 };
+    }
+    byQuadrant[task.quadrant].total++;
+    if (task.isCompleted) {
+      byQuadrant[task.quadrant].completed++;
+    }
+  }
+
+  return { total, completed, byQuadrant };
+}
+
+// ==================== Prompt Templates CRUD ====================
+
+/** Get all prompt templates for a user */
+export async function getPromptTemplates(userId: number) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get prompt templates: database not available");
+    return [];
+  }
+
+  const result = await db
+    .select()
+    .from(promptTemplates)
+    .where(eq(promptTemplates.userId, userId))
+    .orderBy(desc(promptTemplates.isDefault), desc(promptTemplates.updatedAt));
+
+  return result;
+}
+
+/** Create a new prompt template */
+export async function createPromptTemplate(data: {
+  userId: number;
+  name: string;
+  description?: string;
+  promptContent: string;
+  isDefault?: boolean;
+}) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("[Database] Cannot create prompt template: database not available");
+  }
+
+  const now = Date.now();
+
+  // If this is set as default, unset other defaults
+  if (data.isDefault) {
+    await db
+      .update(promptTemplates)
+      .set({ isDefault: false, updatedAt: now })
+      .where(and(eq(promptTemplates.userId, data.userId), eq(promptTemplates.isDefault, true)));
+  }
+
+  const insertData: InsertPromptTemplate = {
+    userId: data.userId,
+    name: data.name,
+    description: data.description || null,
+    promptContent: data.promptContent,
+    isDefault: data.isDefault || false,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const result = await db.insert(promptTemplates).values(insertData);
+  const insertId = result[0].insertId;
+
+  const newTemplate = await db
+    .select()
+    .from(promptTemplates)
+    .where(eq(promptTemplates.id, insertId))
+    .limit(1);
+
+  return newTemplate[0];
+}
+
+/** Update a prompt template */
+export async function updatePromptTemplate(
+  templateId: number,
+  userId: number,
+  updates: {
+    name?: string;
+    description?: string;
+    promptContent?: string;
+    isDefault?: boolean;
+  }
+) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("[Database] Cannot update prompt template: database not available");
+  }
+
+  const now = Date.now();
+
+  // If setting as default, unset other defaults
+  if (updates.isDefault) {
+    await db
+      .update(promptTemplates)
+      .set({ isDefault: false, updatedAt: now })
+      .where(
+        and(
+          eq(promptTemplates.userId, userId),
+          eq(promptTemplates.isDefault, true)
+        )
+      );
+  }
+
+  const updateData: Partial<InsertPromptTemplate> = {
+    updatedAt: now,
+  };
+
+  if (updates.name !== undefined) updateData.name = updates.name;
+  if (updates.description !== undefined) updateData.description = updates.description;
+  if (updates.promptContent !== undefined) updateData.promptContent = updates.promptContent;
+  if (updates.isDefault !== undefined) updateData.isDefault = updates.isDefault;
+
+  await db
+    .update(promptTemplates)
+    .set(updateData)
+    .where(and(eq(promptTemplates.id, templateId), eq(promptTemplates.userId, userId)));
+
+  const updated = await db
+    .select()
+    .from(promptTemplates)
+    .where(eq(promptTemplates.id, templateId))
+    .limit(1);
+
+  return updated[0];
+}
+
+/** Delete a prompt template */
+export async function deletePromptTemplate(templateId: number, userId: number) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("[Database] Cannot delete prompt template: database not available");
+  }
+
+  await db
+    .delete(promptTemplates)
+    .where(and(eq(promptTemplates.id, templateId), eq(promptTemplates.userId, userId)));
+
+  return true;
+}
+
+/** Get default prompt template for a user */
+export async function getDefaultPromptTemplate(userId: number) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get default prompt template: database not available");
+    return null;
+  }
+
+  const result = await db
+    .select()
+    .from(promptTemplates)
+    .where(and(eq(promptTemplates.userId, userId), eq(promptTemplates.isDefault, true)))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : null;
 }

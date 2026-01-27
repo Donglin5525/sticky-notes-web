@@ -3,12 +3,10 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { NoteCard } from "@/components/NoteCard";
 import { NoteEditor } from "@/components/NoteEditor";
 import { QuadrantView } from "@/components/QuadrantView";
 import { Note, NoteColor, noteColors, getQuadrant, quadrantConfig } from "@/types/note";
-import { getLoginUrl } from "@/const";
 import { cn } from "@/lib/utils";
 import {
   Plus,
@@ -16,7 +14,6 @@ import {
   Grid3X3,
   List,
   Trash2,
-  Tag,
   StickyNote,
   LogOut,
   User,
@@ -38,7 +35,7 @@ import { TagTree } from "@/components/TagTree";
 type ViewMode = "list" | "quadrant";
 
 export default function Home() {
-  const { user, loading: authLoading, logout } = useAuth();
+  const { user, logout } = useAuth();
   const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterColor, setFilterColor] = useState<NoteColor | "all">("all");
@@ -252,60 +249,10 @@ export default function Home() {
     }
   };
 
-  // Auth loading state
-  if (authLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  // Not logged in
-  if (!user) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full glass rounded-2xl">
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
-              <StickyNote className="h-8 w-8 text-primary" />
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight text-center">
-              便签笔记
-            </h1>
-            <p className="text-sm text-muted-foreground text-center max-w-sm">
-              使用四象限法则管理您的任务和想法，提高工作效率
-            </p>
-          </div>
-          <Button
-            onClick={() => (window.location.href = getLoginUrl())}
-            size="lg"
-            className="w-full shadow-lg hover:shadow-xl transition-all"
-          >
-            登录开始使用
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex h-screen overflow-hidden">
-      {/* Sidebar */}
-      <aside className="w-64 border-r border-border/50 bg-sidebar/50 backdrop-blur-xl flex flex-col">
-        {/* Logo */}
-        <div className="p-4 border-b border-border/50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-              <StickyNote className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <h1 className="font-bold text-lg">便签笔记</h1>
-              <p className="text-xs text-muted-foreground">四象限管理</p>
-            </div>
-          </div>
-        </div>
-
+    <div className="flex h-full overflow-hidden">
+      {/* Sidebar for filters */}
+      <aside className="w-56 border-r border-border/50 bg-muted/30 flex flex-col">
         {/* New Note Button */}
         <div className="p-4">
           <Button
@@ -401,57 +348,58 @@ export default function Home() {
               />
             </div>
           )}
-
-          {/* Trash */}
-          <div className="mb-6">
-            <Button
-              variant={showTrash ? "default" : "ghost"}
-              className="w-full justify-start gap-2"
-              onClick={() => {
-                setShowTrash(!showTrash);
-                setSelectedNoteId(null);
-              }}
-            >
-              <Trash2 className="h-4 w-4" />
-              回收站
-              {trashedNotes.length > 0 && (
-                <Badge variant="secondary" className="ml-auto">
-                  {trashedNotes.length}
-                </Badge>
-              )}
-            </Button>
-          </div>
         </ScrollArea>
+
+        {/* Trash */}
+        <div className="p-4 border-t border-border/50">
+          <Button
+            variant={showTrash ? "secondary" : "ghost"}
+            className="w-full justify-start gap-2"
+            onClick={() => setShowTrash(!showTrash)}
+          >
+            <Trash2 className="h-4 w-4" />
+            {showTrash ? "返回便签" : "回收站"}
+            {trashedNotes.length > 0 && !showTrash && (
+              <Badge variant="secondary" className="ml-auto">
+                {trashedNotes.length}
+              </Badge>
+            )}
+          </Button>
+          {showTrash && trashedNotes.length > 0 && (
+            <Button
+              variant="destructive"
+              size="sm"
+              className="w-full mt-2"
+              onClick={() => emptyTrashMutation.mutate()}
+              disabled={emptyTrashMutation.isPending}
+            >
+              {emptyTrashMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : null}
+              清空回收站
+            </Button>
+          )}
+        </div>
 
         {/* User Menu */}
         <div className="p-4 border-t border-border/50">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-3 w-full p-2 rounded-lg hover:bg-accent/50 transition-colors">
-                <Avatar className="h-9 w-9 border">
-                  <AvatarFallback className="text-xs font-medium">
-                    {user.name?.charAt(0).toUpperCase() || "U"}
+              <Button variant="ghost" className="w-full justify-start gap-2 h-auto py-2">
+                <Avatar className="h-8 w-8">
+                  <AvatarFallback className="bg-primary/10 text-primary">
+                    {user?.name?.charAt(0) || <User className="h-4 w-4" />}
                   </AvatarFallback>
                 </Avatar>
-                <div className="flex-1 text-left min-w-0">
-                  <p className="text-sm font-medium truncate">{user.name || "用户"}</p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {user.email || ""}
-                  </p>
+                <div className="flex-1 text-left">
+                  <p className="text-sm font-medium truncate">{user?.name || "用户"}</p>
+                  <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
                 </div>
-              </button>
+              </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem disabled>
-                <User className="mr-2 h-4 w-4" />
-                个人设置
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={logout}
-                className="text-destructive focus:text-destructive"
-              >
-                <LogOut className="mr-2 h-4 w-4" />
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={logout} className="text-destructive">
+                <LogOut className="h-4 w-4 mr-2" />
                 退出登录
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -462,44 +410,26 @@ export default function Home() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="h-16 border-b border-border/50 bg-background/50 backdrop-blur-xl flex items-center justify-between px-6">
+        <header className="p-4 border-b border-border/50 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <h2 className="text-xl font-semibold">
-              {showTrash ? "回收站" : "所有便签"}
+            <h2 className="text-lg font-semibold">
+              {showTrash ? "回收站" : filterTag ? `#${filterTag}` : "所有便签"}
             </h2>
-            <Badge variant="secondary">
-              {showTrash ? trashedNotes.length : filteredNotes.length} 项
+            <Badge variant="outline">
+              {showTrash ? trashedNotes.length : filteredNotes.length} 条
             </Badge>
           </div>
-
-          <div className="flex items-center gap-3">
-            {/* Search */}
-            <div className="relative">
+          
+          <div className="flex items-center gap-2">
+            <div className="relative w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
+                placeholder="搜索便签..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="搜索便签..."
-                className="pl-9 w-64 bg-white/50"
+                className="pl-9"
               />
             </div>
-
-            {/* Empty Trash */}
-            {showTrash && trashedNotes.length > 0 && (
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => emptyTrashMutation.mutate()}
-                disabled={emptyTrashMutation.isPending}
-              >
-                {emptyTrashMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : (
-                  <Trash2 className="h-4 w-4 mr-2" />
-                )}
-                清空回收站
-              </Button>
-            )}
           </div>
         </header>
 
