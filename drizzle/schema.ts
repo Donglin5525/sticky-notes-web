@@ -62,3 +62,94 @@ export type NoteColor = "yellow" | "green" | "blue" | "pink" | "purple" | "orang
 
 /** Quadrant type for Eisenhower Matrix */
 export type Quadrant = "do-first" | "schedule" | "delegate" | "eliminate";
+
+// ==================== Daily Todo Module ====================
+
+/**
+ * Task quadrant types for daily todo
+ * - priority: 优先事项（重要且紧急）
+ * - strategic: 战略项目（重要不紧急）
+ * - trivial: 琐碎事务（紧急不重要）
+ * - trap: 陷阱区域（不重要不紧急）
+ */
+export type TaskQuadrant = "priority" | "strategic" | "trivial" | "trap";
+
+/**
+ * Daily tasks table - stores individual tasks for each day
+ */
+export const dailyTasks = mysqlTable("daily_tasks", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Foreign key to users table */
+  userId: int("userId").notNull(),
+  /** Task title/content */
+  title: varchar("title", { length: 500 }).notNull(),
+  /** Task quadrant */
+  quadrant: mysqlEnum("quadrant", ["priority", "strategic", "trivial", "trap"]).notNull(),
+  /** Is task completed */
+  isCompleted: boolean("isCompleted").default(false).notNull(),
+  /** Optional notes/description */
+  notes: text("notes"),
+  /** The date this task belongs to (YYYY-MM-DD format stored as string) */
+  taskDate: varchar("taskDate", { length: 10 }).notNull(),
+  /** Was this task carried over from a previous day */
+  isCarriedOver: boolean("isCarriedOver").default(false).notNull(),
+  /** Original date if carried over */
+  originalDate: varchar("originalDate", { length: 10 }),
+  /** Sort order within quadrant */
+  sortOrder: int("sortOrder").default(0).notNull(),
+  /** Created timestamp (Unix ms) */
+  createdAt: bigint("createdAt", { mode: "number" }).notNull(),
+  /** Updated timestamp (Unix ms) */
+  updatedAt: bigint("updatedAt", { mode: "number" }).notNull(),
+});
+
+export type DailyTask = typeof dailyTasks.$inferSelect;
+export type InsertDailyTask = typeof dailyTasks.$inferInsert;
+
+/**
+ * Daily summaries table - stores daily reflections and plans
+ */
+export const dailySummaries = mysqlTable("daily_summaries", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Foreign key to users table */
+  userId: int("userId").notNull(),
+  /** The date this summary belongs to (YYYY-MM-DD format) */
+  summaryDate: varchar("summaryDate", { length: 10 }).notNull(),
+  /** Combined: Today's achievements and reflections */
+  reflection: text("reflection"),
+  /** Tomorrow's plan (line-separated tasks) */
+  tomorrowPlan: text("tomorrowPlan"),
+  /** AI-generated analysis result */
+  aiAnalysis: text("aiAnalysis"),
+  /** Created timestamp (Unix ms) */
+  createdAt: bigint("createdAt", { mode: "number" }).notNull(),
+  /** Updated timestamp (Unix ms) */
+  updatedAt: bigint("updatedAt", { mode: "number" }).notNull(),
+});
+
+export type DailySummary = typeof dailySummaries.$inferSelect;
+export type InsertDailySummary = typeof dailySummaries.$inferInsert;
+
+/**
+ * Prompt templates table - stores user-defined prompts for AI analysis
+ */
+export const promptTemplates = mysqlTable("prompt_templates", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Foreign key to users table */
+  userId: int("userId").notNull(),
+  /** Template name */
+  name: varchar("name", { length: 100 }).notNull(),
+  /** Template description */
+  description: varchar("description", { length: 500 }),
+  /** The actual prompt content */
+  promptContent: text("promptContent").notNull(),
+  /** Is this the default template */
+  isDefault: boolean("isDefault").default(false).notNull(),
+  /** Created timestamp (Unix ms) */
+  createdAt: bigint("createdAt", { mode: "number" }).notNull(),
+  /** Updated timestamp (Unix ms) */
+  updatedAt: bigint("updatedAt", { mode: "number" }).notNull(),
+});
+
+export type PromptTemplate = typeof promptTemplates.$inferSelect;
+export type InsertPromptTemplate = typeof promptTemplates.$inferInsert;
