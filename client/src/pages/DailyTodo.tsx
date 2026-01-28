@@ -32,10 +32,33 @@ import {
   Loader2,
   AlertCircle,
   Calendar,
+  GripVertical,
+  CheckSquare,
+  X,
+  Move,
+  Keyboard,
+  FileText,
 } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { Streamdown } from "streamdown";
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { ChangelogDialog } from "@/components/ChangelogDialog";
 
 // Task quadrant types
 type TaskQuadrant = "priority" | "strategic" | "trivial" | "trap";
@@ -81,11 +104,20 @@ const quadrantConfig: Record<TaskQuadrant, { name: string; description: string; 
   },
 };
 
+// Keyboard shortcuts configuration
+const shortcuts = [
+  { key: "N", description: "新建任务", action: "newTask" },
+  { key: "1-4", description: "切换象限 (1=优先, 2=战略, 3=琐碎, 4=陷阱)", action: "quadrant" },
+  { key: "←/→", description: "切换日期", action: "date" },
+  { key: "T", description: "返回今天", action: "today" },
+  { key: "B", description: "批量操作模式", action: "batch" },
+  { key: "Esc", description: "取消/关闭", action: "cancel" },
+];
+
 // Get today's date in YYYY-MM-DD format (Beijing time)
 function getTodayDate(): string {
   const now = new Date();
-  // Convert to Beijing time
-  const beijingOffset = 8 * 60; // UTC+8
+  const beijingOffset = 8 * 60;
   const localOffset = now.getTimezoneOffset();
   const beijingTime = new Date(now.getTime() + (beijingOffset + localOffset) * 60 * 1000);
   return beijingTime.toISOString().split("T")[0];
@@ -109,6 +141,105 @@ function addDays(dateStr: string, days: number): string {
   return date.toISOString().split("T")[0];
 }
 
+// Sortable Task Item Component
+function SortableTaskItem({
+  task,
+  isSelected,
+  isSelectionMode,
+  onToggleComplete,
+  onEdit,
+  onDelete,
+  onSelect,
+}: {
+  task: Task;
+  isSelected: boolean;
+  isSelectionMode: boolean;
+  onToggleComplete: (task: Task) => void;
+  onEdit: (task: Task) => void;
+  onDelete: (taskId: number) => void;
+  onSelect: (taskId: number) => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: task.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "flex items-center gap-3 p-3 rounded-lg bg-white/70 border border-white/50 group",
+        task.isCompleted && "opacity-60",
+        isDragging && "opacity-50 shadow-lg z-50",
+        isSelected && "ring-2 ring-primary bg-primary/5"
+      )}
+    >
+      <div
+        {...attributes}
+        {...listeners}
+        className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
+      >
+        <GripVertical className="h-4 w-4" />
+      </div>
+
+      {isSelectionMode ? (
+        <Checkbox
+          checked={isSelected}
+          onCheckedChange={() => onSelect(task.id)}
+        />
+      ) : (
+        <Checkbox
+          checked={task.isCompleted}
+          onCheckedChange={() => onToggleComplete(task)}
+        />
+      )}
+
+      <div className="flex-1 min-w-0">
+        <p
+          className={cn(
+            "text-sm font-medium truncate",
+            task.isCompleted && "line-through text-muted-foreground"
+          )}
+        >
+          {task.title}
+        </p>
+        {task.isCarriedOver && (
+          <p className="text-xs text-amber-600">延期自 {task.originalDate}</p>
+        )}
+      </div>
+
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          onClick={() => onEdit(task)}
+        >
+          <Pencil className="h-3 w-3" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-destructive"
+          onClick={() => onDelete(task.id)}
+        >
+          <Trash2 className="h-3 w-3" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function DailyTodo() {
   const { user } = useAuth();
   const utils = trpc.useUtils();
@@ -119,7 +250,18 @@ export default function DailyTodo() {
   const [showPromptDialog, setShowPromptDialog] = useState(false);
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
   const [showCarryOverDialog, setShowCarryOverDialog] = useState(false);
+  const [showShortcutsDialog, setShowShortcutsDialog] = useState(false);
+  const [showChangelogDialog, setShowChangelogDialog] = useState(false);
+  const [showBatchMoveDialog, setShowBatchMoveDialog] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  
+  // Batch selection state
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<number>>(new Set());
+  const [batchMoveQuadrant, setBatchMoveQuadrant] = useState<TaskQuadrant>("priority");
+  
+  // Drag state
+  const [activeTask, setActiveTask] = useState<Task | null>(null);
   
   // Form state
   const [newTaskTitle, setNewTaskTitle] = useState("");
@@ -129,6 +271,15 @@ export default function DailyTodo() {
   // Summary state
   const [reflection, setReflection] = useState("");
   const [tomorrowPlan, setTomorrowPlan] = useState("");
+  
+  // DnD sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  );
   
   // Queries
   const { data: tasks = [], isLoading: tasksLoading } = trpc.dailyTasks.list.useQuery(
@@ -170,44 +321,34 @@ export default function DailyTodo() {
   }, [incompleteTasks, selectedDate]);
   
   // ==================== Optimistic Updates & Batch Sync ====================
-  // Local state for optimistic updates
   const [localTasks, setLocalTasks] = useState<Task[]>([]);
   const pendingUpdatesRef = useRef<Map<number, { id: number; isCompleted: boolean }>>(new Map());
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const SYNC_DEBOUNCE_MS = 2000; // 2 seconds debounce
+  const SYNC_DEBOUNCE_MS = 2000;
   
-  // Sync local tasks with server data (only when server data changes)
-  // Use JSON.stringify to avoid infinite loop from array reference changes
   const tasksJson = JSON.stringify(tasks);
   useEffect(() => {
     setLocalTasks(JSON.parse(tasksJson) as Task[]);
   }, [tasksJson]);
   
-  // Batch update mutation
   const batchUpdateMutation = trpc.dailyTasks.batchUpdate.useMutation({
     onSuccess: () => {
-      // Refresh data from server after successful sync
       utils.dailyTasks.list.invalidate({ date: selectedDate });
     },
     onError: () => {
       toast.error("同步失败，正在重试...");
-      // Revert optimistic updates on error
       utils.dailyTasks.list.invalidate({ date: selectedDate });
     },
   });
   
-  // Flush pending updates to server (use ref to avoid dependency issues)
   const flushPendingUpdatesRef = useRef<() => void>(() => {});
   flushPendingUpdatesRef.current = () => {
     if (pendingUpdatesRef.current.size === 0) return;
-    
     const updates = Array.from(pendingUpdatesRef.current.values());
     pendingUpdatesRef.current.clear();
-    
     batchUpdateMutation.mutate({ updates });
   };
   
-  // Schedule sync with debounce
   const scheduleSync = useCallback(() => {
     if (syncTimeoutRef.current) {
       clearTimeout(syncTimeoutRef.current);
@@ -217,18 +358,15 @@ export default function DailyTodo() {
     }, SYNC_DEBOUNCE_MS);
   }, []);
   
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (syncTimeoutRef.current) {
         clearTimeout(syncTimeoutRef.current);
       }
-      // Flush any remaining updates
       flushPendingUpdatesRef.current?.();
     };
   }, []);
   
-  // Flush updates when changing date
   const prevDateRef = useRef(selectedDate);
   useEffect(() => {
     if (prevDateRef.current !== selectedDate) {
@@ -285,7 +423,7 @@ export default function DailyTodo() {
   });
   
   const analyzeMutation = trpc.ai.analyze.useMutation({
-    onSuccess: (data) => {
+    onSuccess: () => {
       utils.dailySummaries.get.invalidate({ date: selectedDate });
       toast.success("分析完成");
     },
@@ -301,7 +439,7 @@ export default function DailyTodo() {
     onError: () => toast.error("创建任务失败，请重试"),
   });
   
-  // Group tasks by quadrant (use localTasks for optimistic updates)
+  // Group tasks by quadrant
   const tasksByQuadrant = useMemo(() => {
     const grouped: Record<TaskQuadrant, Task[]> = {
       priority: [],
@@ -315,14 +453,14 @@ export default function DailyTodo() {
     return grouped;
   }, [localTasks]);
   
-  // Task stats (use localTasks for immediate feedback)
+  // Task stats
   const taskStats = useMemo(() => {
     const total = localTasks.length;
     const completed = localTasks.filter((t: Task) => t.isCompleted).length;
     return { total, completed };
   }, [localTasks]);
   
-  // Handlers
+  // ==================== Handlers ====================
   const handleCreateTask = () => {
     if (!newTaskTitle.trim()) {
       toast.error("请输入任务名称");
@@ -336,22 +474,15 @@ export default function DailyTodo() {
     });
   };
   
-  // Optimistic toggle with batch sync
   const handleToggleComplete = useCallback((task: Task) => {
     const newIsCompleted = !task.isCompleted;
-    
-    // 1. Immediately update local state (optimistic update)
     setLocalTasks(prev => 
       prev.map(t => t.id === task.id ? { ...t, isCompleted: newIsCompleted } : t)
     );
-    
-    // 2. Queue the update for batch sync
     pendingUpdatesRef.current.set(task.id, {
       id: task.id,
       isCompleted: newIsCompleted,
     });
-    
-    // 3. Schedule the sync
     scheduleSync();
   }, [scheduleSync]);
   
@@ -404,345 +535,483 @@ export default function DailyTodo() {
     setSelectedDate(getTodayDate());
   };
   
+  // ==================== Drag & Drop Handlers ====================
+  const handleDragStart = (event: DragStartEvent) => {
+    const taskId = event.active.id as number;
+    const task = localTasks.find(t => t.id === taskId);
+    if (task) {
+      setActiveTask(task);
+    }
+  };
+  
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveTask(null);
+    
+    if (!over) return;
+    
+    const taskId = active.id as number;
+    const overId = over.id as string;
+    
+    // Check if dropped on a quadrant
+    if (overId.startsWith("quadrant-")) {
+      const newQuadrant = overId.replace("quadrant-", "") as TaskQuadrant;
+      const task = localTasks.find(t => t.id === taskId);
+      
+      if (task && task.quadrant !== newQuadrant) {
+        // Optimistic update
+        setLocalTasks(prev =>
+          prev.map(t => t.id === taskId ? { ...t, quadrant: newQuadrant } : t)
+        );
+        // Update on server
+        updateTaskMutation.mutate({
+          id: taskId,
+          quadrant: newQuadrant,
+        });
+      }
+    }
+  };
+  
+  // ==================== Batch Operations ====================
+  const handleToggleSelection = (taskId: number) => {
+    setSelectedTaskIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(taskId)) {
+        newSet.delete(taskId);
+      } else {
+        newSet.add(taskId);
+      }
+      return newSet;
+    });
+  };
+  
+  const handleSelectAll = () => {
+    if (selectedTaskIds.size === localTasks.length) {
+      setSelectedTaskIds(new Set());
+    } else {
+      setSelectedTaskIds(new Set(localTasks.map(t => t.id)));
+    }
+  };
+  
+  const handleBatchDelete = () => {
+    if (selectedTaskIds.size === 0) {
+      toast.error("请先选择任务");
+      return;
+    }
+    selectedTaskIds.forEach(id => {
+      deleteTaskMutation.mutate({ id });
+    });
+    setSelectedTaskIds(new Set());
+    setIsSelectionMode(false);
+    toast.success(`已删除 ${selectedTaskIds.size} 个任务`);
+  };
+  
+  const handleBatchMove = () => {
+    if (selectedTaskIds.size === 0) {
+      toast.error("请先选择任务");
+      return;
+    }
+    setShowBatchMoveDialog(true);
+  };
+  
+  const handleConfirmBatchMove = () => {
+    selectedTaskIds.forEach(id => {
+      updateTaskMutation.mutate({
+        id,
+        quadrant: batchMoveQuadrant,
+      });
+    });
+    setShowBatchMoveDialog(false);
+    setSelectedTaskIds(new Set());
+    setIsSelectionMode(false);
+    toast.success(`已移动 ${selectedTaskIds.size} 个任务到${quadrantConfig[batchMoveQuadrant].name}`);
+  };
+  
+  const exitSelectionMode = () => {
+    setIsSelectionMode(false);
+    setSelectedTaskIds(new Set());
+  };
+  
+  // ==================== Keyboard Shortcuts ====================
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in input/textarea
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+      
+      // Escape - close dialogs or exit selection mode
+      if (e.key === "Escape") {
+        if (isSelectionMode) {
+          exitSelectionMode();
+        } else if (showAddTaskDialog) {
+          setShowAddTaskDialog(false);
+        }
+        return;
+      }
+      
+      // N - New task
+      if (e.key === "n" || e.key === "N") {
+        e.preventDefault();
+        setShowAddTaskDialog(true);
+        return;
+      }
+      
+      // T - Today
+      if (e.key === "t" || e.key === "T") {
+        e.preventDefault();
+        handleToday();
+        return;
+      }
+      
+      // B - Batch mode
+      if (e.key === "b" || e.key === "B") {
+        e.preventDefault();
+        setIsSelectionMode(prev => !prev);
+        if (isSelectionMode) {
+          setSelectedTaskIds(new Set());
+        }
+        return;
+      }
+      
+      // Arrow keys - navigate dates
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        handlePrevDay();
+        return;
+      }
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        handleNextDay();
+        return;
+      }
+      
+      // 1-4 - Select quadrant for new task
+      if (showAddTaskDialog) {
+        if (e.key === "1") {
+          setNewTaskQuadrant("priority");
+        } else if (e.key === "2") {
+          setNewTaskQuadrant("strategic");
+        } else if (e.key === "3") {
+          setNewTaskQuadrant("trivial");
+        } else if (e.key === "4") {
+          setNewTaskQuadrant("trap");
+        }
+      }
+    };
+    
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isSelectionMode, showAddTaskDialog]);
+  
   const isToday = selectedDate === getTodayDate();
   
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden">
-      {/* Header */}
-      <header className="p-4 border-b border-border/50 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={handlePrevDay}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <div className="text-center min-w-[200px]">
-              <h2 className="font-semibold">{formatDisplayDate(selectedDate)}</h2>
-              {!isToday && (
-                <Button variant="link" size="sm" className="text-xs p-0 h-auto" onClick={handleToday}>
-                  返回今天
-                </Button>
-              )}
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
+      <div className="flex-1 flex flex-col h-full overflow-hidden">
+        {/* Header */}
+        <header className="p-4 border-b border-border/50 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="icon" onClick={handlePrevDay}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <div className="text-center min-w-[200px]">
+                <h2 className="font-semibold">{formatDisplayDate(selectedDate)}</h2>
+                {!isToday && (
+                  <Button variant="link" size="sm" className="text-xs p-0 h-auto" onClick={handleToday}>
+                    返回今天
+                  </Button>
+                )}
+              </div>
+              <Button variant="ghost" size="icon" onClick={handleNextDay}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
             </div>
-            <Button variant="ghost" size="icon" onClick={handleNextDay}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+            
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                已完成 {taskStats.completed}
+              </span>
+              <span className="text-border">|</span>
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-amber-500" />
+                进行中 {taskStats.total - taskStats.completed}
+              </span>
+            </div>
           </div>
           
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              已完成 {taskStats.completed}
-            </span>
-            <span className="text-border">|</span>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-amber-500" />
-              进行中 {taskStats.total - taskStats.completed}
-            </span>
+          <div className="flex items-center gap-2">
+            {/* Batch Operations */}
+            {isSelectionMode ? (
+              <>
+                <Button variant="outline" size="sm" onClick={handleSelectAll}>
+                  <CheckSquare className="h-4 w-4 mr-2" />
+                  {selectedTaskIds.size === localTasks.length ? "取消全选" : "全选"}
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleBatchMove} disabled={selectedTaskIds.size === 0}>
+                  <Move className="h-4 w-4 mr-2" />
+                  移动 ({selectedTaskIds.size})
+                </Button>
+                <Button variant="destructive" size="sm" onClick={handleBatchDelete} disabled={selectedTaskIds.size === 0}>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  删除 ({selectedTaskIds.size})
+                </Button>
+                <Button variant="ghost" size="sm" onClick={exitSelectionMode}>
+                  <X className="h-4 w-4 mr-2" />
+                  取消
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="outline" size="sm" onClick={() => setIsSelectionMode(true)}>
+                  <CheckSquare className="h-4 w-4 mr-2" />
+                  批量操作
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setShowShortcutsDialog(true)}>
+                  <Keyboard className="h-4 w-4 mr-2" />
+                  快捷键
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setShowHistoryDialog(true)}>
+                  <History className="h-4 w-4 mr-2" />
+                  历史记录
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setShowPromptDialog(true)}>
+                  <Settings className="h-4 w-4 mr-2" />
+                  Prompt 管理
+                </Button>
+              </>
+            )}
+          </div>
+        </header>
+        
+        {/* Main Content */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="p-6 space-y-6">
+            {/* Four Quadrants with Drag & Drop */}
+            <div className="grid grid-cols-2 gap-4">
+              {(Object.keys(quadrantConfig) as TaskQuadrant[]).map((quadrant) => (
+                <div
+                  key={quadrant}
+                  id={`quadrant-${quadrant}`}
+                  className={cn(
+                    "rounded-xl p-4 border min-h-[200px]",
+                    quadrantConfig[quadrant].bgColor
+                  )}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className={cn("w-3 h-3 rounded-full", {
+                        "bg-red-500": quadrant === "priority",
+                        "bg-blue-500": quadrant === "strategic",
+                        "bg-amber-500": quadrant === "trivial",
+                        "bg-gray-400": quadrant === "trap",
+                      })} />
+                      <h3 className={cn("font-semibold", quadrantConfig[quadrant].color)}>
+                        {quadrantConfig[quadrant].name}
+                      </h3>
+                      <span className="text-xs text-muted-foreground">
+                        {quadrantConfig[quadrant].description}
+                      </span>
+                    </div>
+                    <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", {
+                      "bg-red-100 text-red-600": quadrant === "priority",
+                      "bg-blue-100 text-blue-600": quadrant === "strategic",
+                      "bg-amber-100 text-amber-600": quadrant === "trivial",
+                      "bg-gray-100 text-gray-600": quadrant === "trap",
+                    })}>
+                      {tasksByQuadrant[quadrant].length} 项
+                    </span>
+                  </div>
+                  
+                  <SortableContext
+                    items={tasksByQuadrant[quadrant].map(t => t.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-2">
+                      {tasksByQuadrant[quadrant].map((task: Task) => (
+                        <SortableTaskItem
+                          key={task.id}
+                          task={task}
+                          isSelected={selectedTaskIds.has(task.id)}
+                          isSelectionMode={isSelectionMode}
+                          onToggleComplete={handleToggleComplete}
+                          onEdit={setEditingTask}
+                          onDelete={handleDeleteTask}
+                          onSelect={handleToggleSelection}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                  
+                  <Button
+                    variant="ghost"
+                    className="w-full mt-3 text-muted-foreground hover:text-foreground"
+                    onClick={() => {
+                      setNewTaskQuadrant(quadrant);
+                      setShowAddTaskDialog(true);
+                    }}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    添加任务
+                  </Button>
+                </div>
+              ))}
+            </div>
+            
+            {/* Daily Summary */}
+            <div className="bg-white rounded-xl p-5 border border-border/50 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Pencil className="h-5 w-5 text-amber-500" />
+                  <h3 className="font-semibold">今日总结</h3>
+                </div>
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={handleAnalyze}
+                  disabled={analyzeMutation.isPending}
+                  className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600"
+                >
+                  {analyzeMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4 mr-2" />
+                  )}
+                  智能分析
+                </Button>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-lg">🎯</span>
+                    <h4 className="font-medium text-emerald-700">今日收获与反思</h4>
+                  </div>
+                  <Textarea
+                    value={reflection}
+                    onChange={(e) => setReflection(e.target.value)}
+                    placeholder="记录今天的成就、收获和反思..."
+                    className="min-h-[120px] bg-white/70 border-0 focus-visible:ring-emerald-300 resize-none"
+                  />
+                </div>
+                
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">📋</span>
+                      <h4 className="font-medium text-blue-700">明日计划</h4>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleGenerateTomorrowTasks}
+                      disabled={generateTasksMutation.isPending || !tomorrowPlan.trim()}
+                      className="text-xs"
+                    >
+                      {generateTasksMutation.isPending ? (
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                      ) : (
+                        <Plus className="h-3 w-3 mr-1" />
+                      )}
+                      生成任务
+                    </Button>
+                  </div>
+                  <Textarea
+                    value={tomorrowPlan}
+                    onChange={(e) => setTomorrowPlan(e.target.value)}
+                    placeholder="每行一个任务，AI 会自动分配到四象限..."
+                    className="min-h-[120px] bg-white/70 border-0 focus-visible:ring-blue-300 resize-none"
+                  />
+                </div>
+              </div>
+              
+              {summary?.aiAnalysis && (
+                <div className="mt-4 p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Sparkles className="h-4 w-4 text-purple-500" />
+                    <h4 className="font-medium text-purple-700">AI 分析结果</h4>
+                  </div>
+                  <div className="prose prose-sm max-w-none text-gray-700">
+                    <Streamdown>{summary.aiAnalysis}</Streamdown>
+                  </div>
+                </div>
+              )}
+              
+              <div className="flex justify-end mt-4">
+                <Button onClick={handleSaveSummary} disabled={upsertSummaryMutation.isPending}>
+                  {upsertSummaryMutation.isPending && (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  )}
+                  保存总结
+                </Button>
+              </div>
+            </div>
+            
+            {/* Changelog Button */}
+            <div className="flex justify-center pb-4">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground hover:text-foreground"
+                onClick={() => setShowChangelogDialog(true)}
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                更新日志 v1.3.0
+              </Button>
+            </div>
           </div>
         </div>
         
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setShowHistoryDialog(true)}>
-            <History className="h-4 w-4 mr-2" />
-            历史记录
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setShowPromptDialog(true)}>
-            <Settings className="h-4 w-4 mr-2" />
-            Prompt 管理
-          </Button>
-        </div>
-      </header>
-      
-      {/* Main Content */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="p-6 space-y-6">
-          {/* Four Quadrants */}
-          <div className="grid grid-cols-2 gap-4">
-            {(Object.keys(quadrantConfig) as TaskQuadrant[]).map((quadrant) => (
-              <div
-                key={quadrant}
-                className={cn(
-                  "rounded-xl p-4 border",
-                  quadrantConfig[quadrant].bgColor
-                )}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <div className={cn("w-3 h-3 rounded-full", {
-                      "bg-red-500": quadrant === "priority",
-                      "bg-blue-500": quadrant === "strategic",
-                      "bg-amber-500": quadrant === "trivial",
-                      "bg-gray-400": quadrant === "trap",
-                    })} />
-                    <h3 className={cn("font-semibold", quadrantConfig[quadrant].color)}>
-                      {quadrantConfig[quadrant].name}
-                    </h3>
-                    <span className="text-xs text-muted-foreground">
-                      {quadrantConfig[quadrant].description}
-                    </span>
-                  </div>
-                  <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", {
-                    "bg-red-100 text-red-600": quadrant === "priority",
-                    "bg-blue-100 text-blue-600": quadrant === "strategic",
-                    "bg-amber-100 text-amber-600": quadrant === "trivial",
-                    "bg-gray-100 text-gray-600": quadrant === "trap",
-                  })}>
-                    {tasksByQuadrant[quadrant].length} 项
-                  </span>
-                </div>
-                
-                <div className="space-y-2">
-                  {tasksByQuadrant[quadrant].map((task: Task) => (
-                    <div
-                      key={task.id}
-                      className={cn(
-                        "flex items-center gap-3 p-3 rounded-lg bg-white/70 border border-white/50 group",
-                        task.isCompleted && "opacity-60"
-                      )}
-                    >
-                      <Checkbox
-                        checked={task.isCompleted}
-                        onCheckedChange={() => handleToggleComplete(task)}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className={cn(
-                          "text-sm font-medium truncate",
-                          task.isCompleted && "line-through text-muted-foreground"
-                        )}>
-                          {task.title}
-                        </p>
-                        {task.isCarriedOver && (
-                          <p className="text-xs text-amber-600">
-                            延期自 {task.originalDate}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => setEditingTask(task)}
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive"
-                          onClick={() => handleDeleteTask(task.id)}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                
-                <Button
-                  variant="ghost"
-                  className="w-full mt-3 text-muted-foreground hover:text-foreground"
-                  onClick={() => {
-                    setNewTaskQuadrant(quadrant);
-                    setShowAddTaskDialog(true);
-                  }}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  添加任务
-                </Button>
-              </div>
-            ))}
-          </div>
-          
-          {/* Daily Summary */}
-          <div className="bg-white rounded-xl p-5 border border-border/50 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Pencil className="h-5 w-5 text-amber-500" />
-                <h3 className="font-semibold">今日总结</h3>
-              </div>
-              <Button
-                variant="default"
-                size="sm"
-                onClick={handleAnalyze}
-                disabled={analyzeMutation.isPending}
-                className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600"
-              >
-                {analyzeMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Sparkles className="h-4 w-4 mr-2" />
-                )}
-                智能分析
-              </Button>
+        {/* Drag Overlay */}
+        <DragOverlay>
+          {activeTask && (
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-white border shadow-lg">
+              <GripVertical className="h-4 w-4 text-muted-foreground" />
+              <Checkbox checked={activeTask.isCompleted} disabled />
+              <span className="text-sm font-medium">{activeTask.title}</span>
             </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              {/* Today's Reflection */}
-              <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-lg">🎯</span>
-                  <h4 className="font-medium text-emerald-700">今日收获与反思</h4>
-                </div>
-                <Textarea
-                  value={reflection}
-                  onChange={(e) => setReflection(e.target.value)}
-                  placeholder="记录今天的成就、收获和反思..."
-                  className="min-h-[120px] bg-white/70 border-0 focus-visible:ring-emerald-300 resize-none"
-                />
-              </div>
-              
-              {/* Tomorrow's Plan */}
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">📋</span>
-                    <h4 className="font-medium text-blue-700">明日计划</h4>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleGenerateTomorrowTasks}
-                    disabled={generateTasksMutation.isPending || !tomorrowPlan.trim()}
-                    className="text-xs"
-                  >
-                    {generateTasksMutation.isPending ? (
-                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                    ) : (
-                      <Plus className="h-3 w-3 mr-1" />
-                    )}
-                    生成任务
-                  </Button>
-                </div>
-                <Textarea
-                  value={tomorrowPlan}
-                  onChange={(e) => setTomorrowPlan(e.target.value)}
-                  placeholder="每行一个任务，AI 会自动分配到四象限..."
-                  className="min-h-[120px] bg-white/70 border-0 focus-visible:ring-blue-300 resize-none"
-                />
-              </div>
-            </div>
-            
-            {/* AI Analysis Result */}
-            {summary?.aiAnalysis && (
-              <div className="mt-4 p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl">
-                <div className="flex items-center gap-2 mb-3">
-                  <Sparkles className="h-4 w-4 text-purple-500" />
-                  <h4 className="font-medium text-purple-700">AI 分析结果</h4>
-                </div>
-                <div className="prose prose-sm max-w-none text-gray-700">
-                  <Streamdown>{summary.aiAnalysis}</Streamdown>
-                </div>
-              </div>
-            )}
-            
-            <div className="flex justify-end mt-4">
-              <Button onClick={handleSaveSummary} disabled={upsertSummaryMutation.isPending}>
-                {upsertSummaryMutation.isPending && (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                )}
-                保存总结
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      {/* Add Task Dialog */}
-      <Dialog open={showAddTaskDialog} onOpenChange={setShowAddTaskDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>添加新任务</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div>
-              <label className="text-sm font-medium mb-2 block">任务名称</label>
-              <Input
-                value={newTaskTitle}
-                onChange={(e) => setNewTaskTitle(e.target.value)}
-                placeholder="输入任务名称..."
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-2 block">所属象限</label>
-              <div className="grid grid-cols-2 gap-2">
-                {(Object.keys(quadrantConfig) as TaskQuadrant[]).map((q) => (
-                  <button
-                    key={q}
-                    type="button"
-                    className={cn(
-                      "flex items-center gap-2 p-3 rounded-lg border transition-colors",
-                      newTaskQuadrant === q
-                        ? quadrantConfig[q].bgColor + " border-2"
-                        : "border-gray-200 hover:bg-gray-50"
-                    )}
-                    onClick={() => setNewTaskQuadrant(q)}
-                  >
-                    <div className={cn("w-3 h-3 rounded-full", {
-                      "bg-red-500": q === "priority",
-                      "bg-blue-500": q === "strategic",
-                      "bg-amber-500": q === "trivial",
-                      "bg-gray-400": q === "trap",
-                    })} />
-                    <span className="text-sm font-medium">{quadrantConfig[q].name}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-2 block">备注（可选）</label>
-              <Textarea
-                value={newTaskNotes}
-                onChange={(e) => setNewTaskNotes(e.target.value)}
-                placeholder="添加任务备注..."
-                className="resize-none"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddTaskDialog(false)}>
-              取消
-            </Button>
-            <Button onClick={handleCreateTask} disabled={createTaskMutation.isPending}>
-              {createTaskMutation.isPending && (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              )}
-              添加任务
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
-      {/* Edit Task Dialog */}
-      <Dialog open={!!editingTask} onOpenChange={() => setEditingTask(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>编辑任务</DialogTitle>
-          </DialogHeader>
-          {editingTask && (
+          )}
+        </DragOverlay>
+        
+        {/* Add Task Dialog */}
+        <Dialog open={showAddTaskDialog} onOpenChange={setShowAddTaskDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>添加新任务</DialogTitle>
+            </DialogHeader>
             <div className="space-y-4 py-4">
               <div>
                 <label className="text-sm font-medium mb-2 block">任务名称</label>
                 <Input
-                  value={editingTask.title}
-                  onChange={(e) => setEditingTask({ ...editingTask, title: e.target.value })}
+                  value={newTaskTitle}
+                  onChange={(e) => setNewTaskTitle(e.target.value)}
+                  placeholder="输入任务名称..."
+                  autoFocus
                 />
               </div>
               <div>
-                <label className="text-sm font-medium mb-2 block">所属象限</label>
+                <label className="text-sm font-medium mb-2 block">所属象限 (按 1-4 快速选择)</label>
                 <div className="grid grid-cols-2 gap-2">
-                  {(Object.keys(quadrantConfig) as TaskQuadrant[]).map((q) => (
+                  {(Object.keys(quadrantConfig) as TaskQuadrant[]).map((q, index) => (
                     <button
                       key={q}
                       type="button"
                       className={cn(
                         "flex items-center gap-2 p-3 rounded-lg border transition-colors",
-                        editingTask.quadrant === q
+                        newTaskQuadrant === q
                           ? quadrantConfig[q].bgColor + " border-2"
                           : "border-gray-200 hover:bg-gray-50"
                       )}
-                      onClick={() => setEditingTask({ ...editingTask, quadrant: q })}
+                      onClick={() => setNewTaskQuadrant(q)}
                     >
+                      <span className="text-xs text-muted-foreground">{index + 1}</span>
                       <div className={cn("w-3 h-3 rounded-full", {
                         "bg-red-500": q === "priority",
                         "bg-blue-500": q === "strategic",
@@ -755,137 +1024,252 @@ export default function DailyTodo() {
                 </div>
               </div>
               <div>
-                <label className="text-sm font-medium mb-2 block">备注</label>
+                <label className="text-sm font-medium mb-2 block">备注（可选）</label>
                 <Textarea
-                  value={editingTask.notes || ""}
-                  onChange={(e) => setEditingTask({ ...editingTask, notes: e.target.value })}
+                  value={newTaskNotes}
+                  onChange={(e) => setNewTaskNotes(e.target.value)}
+                  placeholder="添加任务备注..."
                   className="resize-none"
                 />
               </div>
             </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingTask(null)}>
-              取消
-            </Button>
-            <Button
-              onClick={() => {
-                if (editingTask) {
-                  updateTaskMutation.mutate({
-                    id: editingTask.id,
-                    title: editingTask.title,
-                    quadrant: editingTask.quadrant,
-                    notes: editingTask.notes || undefined,
-                  });
-                }
-              }}
-              disabled={updateTaskMutation.isPending}
-            >
-              {updateTaskMutation.isPending && (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              )}
-              保存
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
-      {/* Carry Over Dialog */}
-      <Dialog open={showCarryOverDialog} onOpenChange={setShowCarryOverDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-amber-500" />
-              有未完成的任务
-            </DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            <p className="text-sm text-muted-foreground mb-4">
-              以下任务在之前的日期未完成，是否延期到今天？
-            </p>
-            <div className="space-y-2 max-h-[300px] overflow-auto">
-              {incompleteTasks.map((task: Task) => (
-                <div
-                  key={task.id}
-                  className="flex items-center gap-3 p-3 rounded-lg border bg-amber-50/50"
-                >
-                  <Checkbox
-                    id={`carry-${task.id}`}
-                    defaultChecked
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowAddTaskDialog(false)}>
+                取消
+              </Button>
+              <Button onClick={handleCreateTask} disabled={createTaskMutation.isPending}>
+                {createTaskMutation.isPending && (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                )}
+                添加任务
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        
+        {/* Edit Task Dialog */}
+        <Dialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>编辑任务</DialogTitle>
+            </DialogHeader>
+            {editingTask && (
+              <div className="space-y-4 py-4">
+                <div>
+                  <label className="text-sm font-medium mb-2 block">任务名称</label>
+                  <Input
+                    value={editingTask.title}
+                    onChange={(e) => setEditingTask({ ...editingTask, title: e.target.value })}
                   />
-                  <div className="flex-1">
-                    <label htmlFor={`carry-${task.id}`} className="text-sm font-medium cursor-pointer">
-                      {task.title}
-                    </label>
-                    <p className="text-xs text-muted-foreground">
-                      原日期: {task.taskDate} · {quadrantConfig[task.quadrant as TaskQuadrant].name}
-                    </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-2 block">所属象限</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(Object.keys(quadrantConfig) as TaskQuadrant[]).map((q) => (
+                      <button
+                        key={q}
+                        type="button"
+                        className={cn(
+                          "flex items-center gap-2 p-3 rounded-lg border transition-colors",
+                          editingTask.quadrant === q
+                            ? quadrantConfig[q].bgColor + " border-2"
+                            : "border-gray-200 hover:bg-gray-50"
+                        )}
+                        onClick={() => setEditingTask({ ...editingTask, quadrant: q })}
+                      >
+                        <div className={cn("w-3 h-3 rounded-full", {
+                          "bg-red-500": q === "priority",
+                          "bg-blue-500": q === "strategic",
+                          "bg-amber-500": q === "trivial",
+                          "bg-gray-400": q === "trap",
+                        })} />
+                        <span className="text-sm font-medium">{quadrantConfig[q].name}</span>
+                      </button>
+                    ))}
                   </div>
                 </div>
-              ))}
+                <div>
+                  <label className="text-sm font-medium mb-2 block">备注</label>
+                  <Textarea
+                    value={editingTask.notes || ""}
+                    onChange={(e) => setEditingTask({ ...editingTask, notes: e.target.value })}
+                    className="resize-none"
+                  />
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditingTask(null)}>
+                取消
+              </Button>
+              <Button
+                onClick={() => {
+                  if (editingTask) {
+                    updateTaskMutation.mutate({
+                      id: editingTask.id,
+                      title: editingTask.title,
+                      quadrant: editingTask.quadrant,
+                      notes: editingTask.notes || undefined,
+                    });
+                  }
+                }}
+                disabled={updateTaskMutation.isPending}
+              >
+                {updateTaskMutation.isPending && (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                )}
+                保存修改
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        
+        {/* Batch Move Dialog */}
+        <Dialog open={showBatchMoveDialog} onOpenChange={setShowBatchMoveDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>批量移动任务</DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <p className="text-sm text-muted-foreground mb-4">
+                将选中的 {selectedTaskIds.size} 个任务移动到：
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {(Object.keys(quadrantConfig) as TaskQuadrant[]).map((q) => (
+                  <button
+                    key={q}
+                    type="button"
+                    className={cn(
+                      "flex items-center gap-2 p-3 rounded-lg border transition-colors",
+                      batchMoveQuadrant === q
+                        ? quadrantConfig[q].bgColor + " border-2"
+                        : "border-gray-200 hover:bg-gray-50"
+                    )}
+                    onClick={() => setBatchMoveQuadrant(q)}
+                  >
+                    <div className={cn("w-3 h-3 rounded-full", {
+                      "bg-red-500": q === "priority",
+                      "bg-blue-500": q === "strategic",
+                      "bg-amber-500": q === "trivial",
+                      "bg-gray-400": q === "trap",
+                    })} />
+                    <span className="text-sm font-medium">{quadrantConfig[q].name}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCarryOverDialog(false)}>
-              暂不延期
-            </Button>
-            <Button
-              onClick={() => {
-                const taskIds = incompleteTasks.map((t: Task) => t.id);
-                handleCarryOver(taskIds);
-              }}
-              disabled={carryOverMutation.isPending}
-            >
-              {carryOverMutation.isPending && (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              )}
-              延期到今天
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
-      {/* Prompt Management Dialog */}
-      <PromptManagementDialog
-        open={showPromptDialog}
-        onOpenChange={setShowPromptDialog}
-        templates={promptTemplates}
-      />
-      
-      {/* History Dialog */}
-      <HistoryDialog
-        open={showHistoryDialog}
-        onOpenChange={setShowHistoryDialog}
-      />
-    </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowBatchMoveDialog(false)}>
+                取消
+              </Button>
+              <Button onClick={handleConfirmBatchMove}>
+                确认移动
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        
+        {/* Shortcuts Dialog */}
+        <Dialog open={showShortcutsDialog} onOpenChange={setShowShortcutsDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Keyboard className="h-5 w-5" />
+                键盘快捷键
+              </DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <div className="space-y-3">
+                {shortcuts.map((shortcut) => (
+                  <div key={shortcut.key} className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">{shortcut.description}</span>
+                    <kbd className="px-2 py-1 text-xs font-mono bg-muted rounded border">
+                      {shortcut.key}
+                    </kbd>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+        
+        {/* Changelog Dialog */}
+        <ChangelogDialog open={showChangelogDialog} onOpenChange={setShowChangelogDialog} />
+        
+        {/* Carry Over Dialog */}
+        <Dialog open={showCarryOverDialog} onOpenChange={setShowCarryOverDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-amber-500" />
+                未完成任务提醒
+              </DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <p className="text-sm text-muted-foreground mb-4">
+                您有 {incompleteTasks.length} 个未完成的任务，是否延期到今天？
+              </p>
+              <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                {incompleteTasks.map((task: any) => (
+                  <div key={task.id} className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                    <Checkbox checked={false} disabled />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">{task.title}</p>
+                      <p className="text-xs text-muted-foreground">
+                        来自 {task.taskDate}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowCarryOverDialog(false)}>
+                暂不处理
+              </Button>
+              <Button onClick={() => handleCarryOver(incompleteTasks.map((t: any) => t.id))}>
+                全部延期到今天
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        
+        {/* Prompt Management Dialog */}
+        <Dialog open={showPromptDialog} onOpenChange={setShowPromptDialog}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Prompt 模板管理</DialogTitle>
+            </DialogHeader>
+            <PromptManager templates={promptTemplates} />
+          </DialogContent>
+        </Dialog>
+        
+        {/* History Dialog */}
+        <Dialog open={showHistoryDialog} onOpenChange={setShowHistoryDialog}>
+          <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle>历史记录</DialogTitle>
+            </DialogHeader>
+            <HistoryViewer />
+          </DialogContent>
+        </Dialog>
+      </div>
+    </DndContext>
   );
 }
 
-// Prompt Management Dialog Component
-function PromptManagementDialog({
-  open,
-  onOpenChange,
-  templates,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  templates: any[];
-}) {
+// Prompt Manager Component
+function PromptManager({ templates }: { templates: any[] }) {
   const utils = trpc.useUtils();
-  const [editingTemplate, setEditingTemplate] = useState<any>(null);
-  const [newTemplate, setNewTemplate] = useState({
-    name: "",
-    description: "",
-    promptContent: "",
-    isDefault: false,
-  });
-  const [showNewForm, setShowNewForm] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newContent, setNewContent] = useState("");
+  const [editingId, setEditingId] = useState<number | null>(null);
   
   const createMutation = trpc.promptTemplates.create.useMutation({
     onSuccess: () => {
       utils.promptTemplates.list.invalidate();
-      setShowNewForm(false);
-      setNewTemplate({ name: "", description: "", promptContent: "", isDefault: false });
+      setNewName("");
+      setNewContent("");
       toast.success("模板创建成功");
     },
     onError: () => toast.error("创建失败"),
@@ -894,7 +1278,7 @@ function PromptManagementDialog({
   const updateMutation = trpc.promptTemplates.update.useMutation({
     onSuccess: () => {
       utils.promptTemplates.list.invalidate();
-      setEditingTemplate(null);
+      setEditingId(null);
       toast.success("模板更新成功");
     },
     onError: () => toast.error("更新失败"),
@@ -908,152 +1292,100 @@ function PromptManagementDialog({
     onError: () => toast.error("删除失败"),
   });
   
+  // Use update mutation to set default
+  const setDefaultMutation = trpc.promptTemplates.update.useMutation({
+    onSuccess: () => {
+      utils.promptTemplates.list.invalidate();
+      toast.success("已设为默认模板");
+    },
+    onError: () => toast.error("设置失败"),
+  });
+  
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle>Prompt 管理</DialogTitle>
-        </DialogHeader>
-        <ScrollArea className="flex-1 -mx-6 px-6">
-          <div className="space-y-4 py-4">
-            {templates.map((template) => (
-              <div
-                key={template.id}
-                className="p-4 rounded-xl border hover:border-primary/50 transition-colors"
-              >
-                {editingTemplate?.id === template.id ? (
-                  <div className="space-y-3">
-                    <Input
-                      value={editingTemplate.name}
-                      onChange={(e) => setEditingTemplate({ ...editingTemplate, name: e.target.value })}
-                      placeholder="模板名称"
-                    />
-                    <Input
-                      value={editingTemplate.description || ""}
-                      onChange={(e) => setEditingTemplate({ ...editingTemplate, description: e.target.value })}
-                      placeholder="模板描述"
-                    />
-                    <Textarea
-                      value={editingTemplate.promptContent}
-                      onChange={(e) => setEditingTemplate({ ...editingTemplate, promptContent: e.target.value })}
-                      placeholder="Prompt 内容"
-                      className="min-h-[100px]"
-                    />
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        checked={editingTemplate.isDefault}
-                        onCheckedChange={(checked) => setEditingTemplate({ ...editingTemplate, isDefault: checked })}
-                      />
-                      <label className="text-sm">设为默认</label>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={() => updateMutation.mutate(editingTemplate)}>
-                        保存
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => setEditingTemplate(null)}>
-                        取消
-                      </Button>
-                    </div>
+    <div className="space-y-4 py-4">
+      {/* Create new template */}
+      <div className="p-4 border rounded-lg space-y-3">
+        <h4 className="font-medium">新建模板</h4>
+        <Input
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          placeholder="模板名称"
+        />
+        <Textarea
+          value={newContent}
+          onChange={(e) => setNewContent(e.target.value)}
+          placeholder="Prompt 内容，可使用变量：{{tasks}}, {{reflection}}, {{date}}"
+          className="min-h-[100px]"
+        />
+        <Button
+          size="sm"
+          onClick={() => createMutation.mutate({ name: newName, promptContent: newContent })}
+          disabled={!newName.trim() || !newContent.trim() || createMutation.isPending}
+        >
+          {createMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+          创建模板
+        </Button>
+      </div>
+      
+      {/* Template list */}
+      <ScrollArea className="h-[300px]">
+        <div className="space-y-3">
+          {templates.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">暂无模板</p>
+          ) : (
+            templates.map((template: any) => (
+              <div key={template.id} className="p-4 border rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-medium">{template.name}</h4>
+                    {template.isDefault && (
+                      <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full">
+                        默认
+                      </span>
+                    )}
                   </div>
-                ) : (
-                  <>
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-medium">{template.name}</h4>
-                      <div className="flex items-center gap-2">
-                        {template.isDefault && (
-                          <span className="text-xs bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded">
-                            使用中
-                          </span>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => setEditingTemplate(template)}
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive"
-                          onClick={() => deleteMutation.mutate({ id: template.id })}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                    <p className="text-sm text-muted-foreground line-clamp-2">
-                      {template.description || template.promptContent}
-                    </p>
-                  </>
-                )}
-              </div>
-            ))}
-            
-            {showNewForm ? (
-              <div className="p-4 rounded-xl border-2 border-dashed border-primary/50 space-y-3">
-                <Input
-                  value={newTemplate.name}
-                  onChange={(e) => setNewTemplate({ ...newTemplate, name: e.target.value })}
-                  placeholder="模板名称"
-                />
-                <Input
-                  value={newTemplate.description}
-                  onChange={(e) => setNewTemplate({ ...newTemplate, description: e.target.value })}
-                  placeholder="模板描述（可选）"
-                />
-                <Textarea
-                  value={newTemplate.promptContent}
-                  onChange={(e) => setNewTemplate({ ...newTemplate, promptContent: e.target.value })}
-                  placeholder="Prompt 内容（可使用 {{tasks}} {{summary}} {{date}} 变量）"
-                  className="min-h-[100px]"
-                />
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    checked={newTemplate.isDefault}
-                    onCheckedChange={(checked) => setNewTemplate({ ...newTemplate, isDefault: !!checked })}
-                  />
-                  <label className="text-sm">设为默认</label>
+                  <div className="flex items-center gap-1">
+                    {!template.isDefault && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setDefaultMutation.mutate({ id: template.id, isDefault: true })}
+                      >
+                        设为默认
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => setEditingId(template.id)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive"
+                      onClick={() => deleteMutation.mutate({ id: template.id })}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() => createMutation.mutate(newTemplate)}
-                    disabled={!newTemplate.name || !newTemplate.promptContent}
-                  >
-                    创建
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => setShowNewForm(false)}>
-                    取消
-                  </Button>
-                </div>
+                <p className="text-sm text-muted-foreground line-clamp-2">
+                  {template.content}
+                </p>
               </div>
-            ) : (
-              <button
-                className="w-full p-4 rounded-xl border-2 border-dashed border-gray-200 hover:border-primary/50 transition-colors flex items-center justify-center gap-2 text-muted-foreground hover:text-foreground"
-                onClick={() => setShowNewForm(true)}
-              >
-                <Plus className="h-4 w-4" />
-                新建 Prompt 模板
-              </button>
-            )}
-          </div>
-        </ScrollArea>
-      </DialogContent>
-    </Dialog>
+            ))
+          )}
+        </div>
+      </ScrollArea>
+    </div>
   );
 }
 
-// History Dialog Component
-function HistoryDialog({
-  open,
-  onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const { user } = useAuth();
+// History Viewer Component
+function HistoryViewer() {
   const [viewMode, setViewMode] = useState<"year" | "month" | "day">("month");
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
@@ -1065,43 +1397,35 @@ function HistoryDialog({
         startDate: `${selectedYear}-01-01`,
         endDate: `${selectedYear + 1}-01-01`,
       };
-    } else if (viewMode === "month") {
+    } else {
+      const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`;
       const nextMonth = selectedMonth === 12 ? 1 : selectedMonth + 1;
       const nextYear = selectedMonth === 12 ? selectedYear + 1 : selectedYear;
-      return {
-        startDate: `${selectedYear}-${String(selectedMonth).padStart(2, "0")}-01`,
-        endDate: `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`,
-      };
+      const endDate = `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`;
+      return { startDate, endDate };
     }
-    return { startDate: "", endDate: "" };
   }, [viewMode, selectedYear, selectedMonth]);
   
-  const { data: stats } = trpc.dailySummaries.stats.useQuery(dateRange, {
-    enabled: !!user && !!dateRange.startDate,
-  });
+  const { data: stats } = trpc.dailySummaries.stats.useQuery(dateRange);
   
-  const { data: summaries = [] } = trpc.dailySummaries.listInRange.useQuery(dateRange, {
-    enabled: !!user && !!dateRange.startDate,
-  });
+  const { data: summaries = [] } = trpc.dailySummaries.listInRange.useQuery(dateRange);
   
-  const completionRate = stats ? (stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0) : 0;
+  const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
+  const months = Array.from({ length: 12 }, (_, i) => i + 1);
   
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle>历史记录</DialogTitle>
-        </DialogHeader>
-        
-        {/* View Mode & Date Selector */}
-        <div className="flex items-center gap-4 py-2">
-          <div className="flex bg-muted rounded-lg p-1">
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Filters */}
+      <div className="flex items-center gap-4 mb-4">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">视图：</span>
+          <div className="flex rounded-lg border overflow-hidden">
             {(["year", "month", "day"] as const).map((mode) => (
               <button
                 key={mode}
                 className={cn(
-                  "px-4 py-2 text-sm font-medium rounded-md transition-colors",
-                  viewMode === mode ? "bg-background shadow-sm" : "hover:bg-background/50"
+                  "px-3 py-1.5 text-sm transition-colors",
+                  viewMode === mode ? "bg-primary text-primary-foreground" : "hover:bg-muted"
                 )}
                 onClick={() => setViewMode(mode)}
               >
@@ -1109,99 +1433,101 @@ function HistoryDialog({
               </button>
             ))}
           </div>
-          
-          <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(Number(v))}>
-            <SelectTrigger className="w-[120px]">
+        </div>
+        
+        <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(Number(v))}>
+          <SelectTrigger className="w-[100px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {years.map((year) => (
+              <SelectItem key={year} value={String(year)}>
+                {year}年
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        
+        {viewMode !== "year" && (
+          <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(Number(v))}>
+            <SelectTrigger className="w-[100px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {[2024, 2025, 2026].map((year) => (
-                <SelectItem key={year} value={String(year)}>
-                  {year}年
+              {months.map((month) => (
+                <SelectItem key={month} value={String(month)}>
+                  {month}月
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          
-          {viewMode !== "year" && (
-            <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(Number(v))}>
-              <SelectTrigger className="w-[100px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => (
-                  <SelectItem key={month} value={String(month)}>
-                    {month}月
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        )}
+      </div>
+      
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-4 mb-4">
+        <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-4">
+          <p className="text-sm text-muted-foreground mb-1">总任务数</p>
+          <p className="text-2xl font-bold text-emerald-600">{stats?.total || 0}</p>
+        </div>
+        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4">
+          <p className="text-sm text-muted-foreground mb-1">完成率</p>
+          <p className="text-2xl font-bold text-blue-600">
+            {stats?.total ? Math.round((stats.completed / stats.total) * 100) : 0}%
+          </p>
+        </div>
+        <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-4">
+          <p className="text-sm text-muted-foreground mb-1">总结天数</p>
+          <p className="text-2xl font-bold text-amber-600">{summaries.length}</p>
+        </div>
+      </div>
+      
+      {/* Quadrant Distribution */}
+      {stats?.byQuadrant && Object.keys(stats.byQuadrant).length > 0 && (
+        <div className="py-4">
+          <h4 className="text-sm font-medium mb-3">四象限分布</h4>
+          <div className="grid grid-cols-4 gap-2">
+            {(Object.keys(quadrantConfig) as TaskQuadrant[]).map((q) => {
+              const qStats = stats.byQuadrant[q] || { total: 0, completed: 0 };
+              const qRate = qStats.total > 0 ? Math.round((qStats.completed / qStats.total) * 100) : 0;
+              return (
+                <div key={q} className={cn("p-3 rounded-lg", quadrantConfig[q].bgColor)}>
+                  <p className={cn("text-xs font-medium", quadrantConfig[q].color)}>
+                    {quadrantConfig[q].name}
+                  </p>
+                  <p className="text-lg font-bold">{qStats.total}</p>
+                  <p className="text-xs text-muted-foreground">完成率 {qRate}%</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      
+      {/* Summaries List */}
+      <ScrollArea className="flex-1 -mx-6 px-6">
+        <div className="space-y-3 py-4">
+          {summaries.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>暂无记录</p>
+            </div>
+          ) : (
+            summaries.map((summary: any) => (
+              <div key={summary.id} className="p-4 rounded-xl border hover:bg-muted/50 transition-colors">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-medium">{formatDisplayDate(summary.summaryDate)}</h4>
+                </div>
+                {summary.reflection && (
+                  <p className="text-sm text-muted-foreground line-clamp-2">
+                    {summary.reflection}
+                  </p>
+                )}
+              </div>
+            ))
           )}
         </div>
-        
-        {/* Stats Cards */}
-        <div className="grid grid-cols-3 gap-4 py-4">
-          <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-4">
-            <p className="text-sm text-muted-foreground mb-1">总任务数</p>
-            <p className="text-2xl font-bold text-indigo-600">{stats?.total || 0}</p>
-          </div>
-          <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-4">
-            <p className="text-sm text-muted-foreground mb-1">完成率</p>
-            <p className="text-2xl font-bold text-emerald-600">{completionRate}%</p>
-          </div>
-          <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-4">
-            <p className="text-sm text-muted-foreground mb-1">总结天数</p>
-            <p className="text-2xl font-bold text-amber-600">{summaries.length}</p>
-          </div>
-        </div>
-        
-        {/* Quadrant Distribution */}
-        {stats?.byQuadrant && Object.keys(stats.byQuadrant).length > 0 && (
-          <div className="py-4">
-            <h4 className="text-sm font-medium mb-3">四象限分布</h4>
-            <div className="grid grid-cols-4 gap-2">
-              {(Object.keys(quadrantConfig) as TaskQuadrant[]).map((q) => {
-                const qStats = stats.byQuadrant[q] || { total: 0, completed: 0 };
-                const qRate = qStats.total > 0 ? Math.round((qStats.completed / qStats.total) * 100) : 0;
-                return (
-                  <div key={q} className={cn("p-3 rounded-lg", quadrantConfig[q].bgColor)}>
-                    <p className={cn("text-xs font-medium", quadrantConfig[q].color)}>
-                      {quadrantConfig[q].name}
-                    </p>
-                    <p className="text-lg font-bold">{qStats.total}</p>
-                    <p className="text-xs text-muted-foreground">完成率 {qRate}%</p>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-        
-        {/* Summaries List */}
-        <ScrollArea className="flex-1 -mx-6 px-6">
-          <div className="space-y-3 py-4">
-            {summaries.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>暂无记录</p>
-              </div>
-            ) : (
-              summaries.map((summary: any) => (
-                <div key={summary.id} className="p-4 rounded-xl border hover:bg-muted/50 transition-colors">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-medium">{formatDisplayDate(summary.summaryDate)}</h4>
-                  </div>
-                  {summary.reflection && (
-                    <p className="text-sm text-muted-foreground line-clamp-2">
-                      {summary.reflection}
-                    </p>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-        </ScrollArea>
-      </DialogContent>
-    </Dialog>
+      </ScrollArea>
+    </div>
   );
 }
