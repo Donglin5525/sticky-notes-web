@@ -407,9 +407,9 @@ export default function Home() {
                     {user?.name?.charAt(0) || <User className="h-4 w-4" />}
                   </AvatarFallback>
                 </Avatar>
-                <div className="flex-1 text-left">
+                <div className="flex-1 text-left min-w-0 overflow-hidden">
                   <p className="text-sm font-medium truncate">{user?.name || "用户"}</p>
-                  <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+                  <p className="text-xs text-muted-foreground truncate max-w-full">{user?.email}</p>
                 </div>
               </Button>
             </DropdownMenuTrigger>
