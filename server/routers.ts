@@ -21,6 +21,7 @@ import {
   getIncompletePreviousTasks,
   createTask,
   updateTask,
+  batchUpdateTasks,
   deleteTask,
   carryOverTasks,
   getSummaryByDate,
@@ -285,6 +286,26 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         await deleteTask(input.id, ctx.user.id);
         return { success: true };
+      }),
+
+    /** Batch update multiple tasks */
+    batchUpdate: protectedProcedure
+      .input(
+        z.object({
+          updates: z.array(
+            z.object({
+              id: z.number(),
+              title: z.string().optional(),
+              quadrant: z.enum(["priority", "strategic", "trivial", "trap"]).optional(),
+              isCompleted: z.boolean().optional(),
+              notes: z.string().optional(),
+              sortOrder: z.number().optional(),
+            })
+          ),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        return batchUpdateTasks(ctx.user.id, input.updates);
       }),
 
     /** Carry over incomplete tasks to a new date */

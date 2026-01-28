@@ -6,6 +6,7 @@ vi.mock("./db", () => ({
   getIncompletePreviousTasks: vi.fn(),
   createTask: vi.fn(),
   updateTask: vi.fn(),
+  batchUpdateTasks: vi.fn(),
   deleteTask: vi.fn(),
   carryOverTasks: vi.fn(),
   getSummaryByDate: vi.fn(),
@@ -24,6 +25,7 @@ import {
   getIncompletePreviousTasks,
   createTask,
   updateTask,
+  batchUpdateTasks,
   deleteTask,
   carryOverTasks,
   getSummaryByDate,
@@ -134,6 +136,37 @@ describe("Daily Todo Module - Database Functions", () => {
       expect(carryOverTasks).toHaveBeenCalledWith(1, [1], "2026-01-27");
       expect(result).toHaveLength(1);
       expect(result[0].isCarriedOver).toBe(true);
+    });
+
+    it("should batch update multiple tasks", async () => {
+      const mockUpdatedTasks = [
+        { id: 1, title: "Task 1", isCompleted: true, updatedAt: Date.now() },
+        { id: 2, title: "Task 2", isCompleted: true, updatedAt: Date.now() },
+        { id: 3, title: "Task 3", isCompleted: false, updatedAt: Date.now() },
+      ];
+      vi.mocked(batchUpdateTasks).mockResolvedValue(mockUpdatedTasks as any);
+
+      const updates = [
+        { id: 1, isCompleted: true },
+        { id: 2, isCompleted: true },
+        { id: 3, isCompleted: false },
+      ];
+      const result = await batchUpdateTasks(1, updates);
+
+      expect(batchUpdateTasks).toHaveBeenCalledWith(1, updates);
+      expect(result).toHaveLength(3);
+      expect(result[0].isCompleted).toBe(true);
+      expect(result[1].isCompleted).toBe(true);
+      expect(result[2].isCompleted).toBe(false);
+    });
+
+    it("should handle empty batch update", async () => {
+      vi.mocked(batchUpdateTasks).mockResolvedValue([]);
+
+      const result = await batchUpdateTasks(1, []);
+
+      expect(batchUpdateTasks).toHaveBeenCalledWith(1, []);
+      expect(result).toHaveLength(0);
     });
   });
 

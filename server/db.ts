@@ -452,6 +452,57 @@ export async function updateTask(
   return updated[0];
 }
 
+/** Batch update multiple tasks */
+export async function batchUpdateTasks(
+  userId: number,
+  updates: Array<{
+    id: number;
+    title?: string;
+    quadrant?: TaskQuadrant;
+    isCompleted?: boolean;
+    notes?: string;
+    sortOrder?: number;
+  }>
+) {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("[Database] Cannot batch update tasks: database not available");
+  }
+
+  const now = Date.now();
+  const results: DailyTask[] = [];
+
+  for (const update of updates) {
+    const { id, ...updateFields } = update;
+    const updateData: Partial<InsertDailyTask> = {
+      updatedAt: now,
+    };
+
+    if (updateFields.title !== undefined) updateData.title = updateFields.title;
+    if (updateFields.quadrant !== undefined) updateData.quadrant = updateFields.quadrant;
+    if (updateFields.isCompleted !== undefined) updateData.isCompleted = updateFields.isCompleted;
+    if (updateFields.notes !== undefined) updateData.notes = updateFields.notes;
+    if (updateFields.sortOrder !== undefined) updateData.sortOrder = updateFields.sortOrder;
+
+    await db
+      .update(dailyTasks)
+      .set(updateData)
+      .where(and(eq(dailyTasks.id, id), eq(dailyTasks.userId, userId)));
+
+    const updated = await db
+      .select()
+      .from(dailyTasks)
+      .where(eq(dailyTasks.id, id))
+      .limit(1);
+
+    if (updated[0]) {
+      results.push(updated[0]);
+    }
+  }
+
+  return results;
+}
+
 /** Delete a task */
 export async function deleteTask(taskId: number, userId: number) {
   const db = await getDb();

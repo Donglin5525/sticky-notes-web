@@ -33,7 +33,7 @@ import {
   AlertCircle,
   Calendar,
 } from "lucide-react";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { Streamdown } from "streamdown";
 
@@ -169,7 +169,73 @@ export default function DailyTodo() {
     }
   }, [incompleteTasks, selectedDate]);
   
-  // Mutations
+  // ==================== Optimistic Updates & Batch Sync ====================
+  // Local state for optimistic updates
+  const [localTasks, setLocalTasks] = useState<Task[]>([]);
+  const pendingUpdatesRef = useRef<Map<number, { id: number; isCompleted: boolean }>>(new Map());
+  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const SYNC_DEBOUNCE_MS = 2000; // 2 seconds debounce
+  
+  // Sync local tasks with server data (only when server data changes)
+  useEffect(() => {
+    setLocalTasks(tasks as Task[]);
+  }, [tasks]);
+  
+  // Batch update mutation
+  const batchUpdateMutation = trpc.dailyTasks.batchUpdate.useMutation({
+    onSuccess: () => {
+      // Refresh data from server after successful sync
+      utils.dailyTasks.list.invalidate({ date: selectedDate });
+    },
+    onError: () => {
+      toast.error("同步失败，正在重试...");
+      // Revert optimistic updates on error
+      utils.dailyTasks.list.invalidate({ date: selectedDate });
+    },
+  });
+  
+  // Flush pending updates to server (use ref to avoid dependency issues)
+  const flushPendingUpdatesRef = useRef<() => void>(() => {});
+  flushPendingUpdatesRef.current = () => {
+    if (pendingUpdatesRef.current.size === 0) return;
+    
+    const updates = Array.from(pendingUpdatesRef.current.values());
+    pendingUpdatesRef.current.clear();
+    
+    batchUpdateMutation.mutate({ updates });
+  };
+  
+  // Schedule sync with debounce
+  const scheduleSync = useCallback(() => {
+    if (syncTimeoutRef.current) {
+      clearTimeout(syncTimeoutRef.current);
+    }
+    syncTimeoutRef.current = setTimeout(() => {
+      flushPendingUpdatesRef.current?.();
+    }, SYNC_DEBOUNCE_MS);
+  }, []);
+  
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+      }
+      // Flush any remaining updates
+      flushPendingUpdatesRef.current?.();
+    };
+  }, []);
+  
+  // Flush updates when changing date
+  const prevDateRef = useRef(selectedDate);
+  useEffect(() => {
+    if (prevDateRef.current !== selectedDate) {
+      flushPendingUpdatesRef.current?.();
+      prevDateRef.current = selectedDate;
+    }
+  }, [selectedDate]);
+  
+  // ==================== Mutations ====================
   const createTaskMutation = trpc.dailyTasks.create.useMutation({
     onSuccess: () => {
       utils.dailyTasks.list.invalidate({ date: selectedDate });
@@ -233,7 +299,7 @@ export default function DailyTodo() {
     onError: () => toast.error("创建任务失败，请重试"),
   });
   
-  // Group tasks by quadrant
+  // Group tasks by quadrant (use localTasks for optimistic updates)
   const tasksByQuadrant = useMemo(() => {
     const grouped: Record<TaskQuadrant, Task[]> = {
       priority: [],
@@ -241,18 +307,18 @@ export default function DailyTodo() {
       trivial: [],
       trap: [],
     };
-    tasks.forEach((task: Task) => {
+    localTasks.forEach((task: Task) => {
       grouped[task.quadrant as TaskQuadrant].push(task);
     });
     return grouped;
-  }, [tasks]);
+  }, [localTasks]);
   
-  // Task stats
+  // Task stats (use localTasks for immediate feedback)
   const taskStats = useMemo(() => {
-    const total = tasks.length;
-    const completed = tasks.filter((t: Task) => t.isCompleted).length;
+    const total = localTasks.length;
+    const completed = localTasks.filter((t: Task) => t.isCompleted).length;
     return { total, completed };
-  }, [tasks]);
+  }, [localTasks]);
   
   // Handlers
   const handleCreateTask = () => {
@@ -268,12 +334,24 @@ export default function DailyTodo() {
     });
   };
   
-  const handleToggleComplete = (task: Task) => {
-    updateTaskMutation.mutate({
+  // Optimistic toggle with batch sync
+  const handleToggleComplete = useCallback((task: Task) => {
+    const newIsCompleted = !task.isCompleted;
+    
+    // 1. Immediately update local state (optimistic update)
+    setLocalTasks(prev => 
+      prev.map(t => t.id === task.id ? { ...t, isCompleted: newIsCompleted } : t)
+    );
+    
+    // 2. Queue the update for batch sync
+    pendingUpdatesRef.current.set(task.id, {
       id: task.id,
-      isCompleted: !task.isCompleted,
+      isCompleted: newIsCompleted,
     });
-  };
+    
+    // 3. Schedule the sync
+    scheduleSync();
+  }, [scheduleSync]);
   
   const handleDeleteTask = (taskId: number) => {
     deleteTaskMutation.mutate({ id: taskId });
@@ -374,7 +452,7 @@ export default function DailyTodo() {
       </header>
       
       {/* Main Content */}
-      <ScrollArea className="flex-1">
+      <div className="flex-1 overflow-y-auto">
         <div className="p-6 space-y-6">
           {/* Four Quadrants */}
           <div className="grid grid-cols-2 gap-4">
@@ -566,7 +644,7 @@ export default function DailyTodo() {
             </div>
           </div>
         </div>
-      </ScrollArea>
+      </div>
       
       {/* Add Task Dialog */}
       <Dialog open={showAddTaskDialog} onOpenChange={setShowAddTaskDialog}>
