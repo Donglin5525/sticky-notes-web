@@ -89,7 +89,7 @@ export function ChangelogDialog({ open, onOpenChange }: ChangelogDialogProps) {
                 className="relative pl-6 pb-6 border-l-2 border-muted last:pb-0"
               >
                 {/* Timeline dot */}
-                <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-primary" />
+                <div className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-primary border-2 border-background" />
                 
                 {/* Version header */}
                 <div className="flex items-center gap-3 mb-2">
