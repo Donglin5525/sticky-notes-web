@@ -18,36 +18,37 @@ const changelog: ChangelogEntry[] = [
   {
     version: "1.3.0",
     date: "2026-01-28",
-    title: "功能增强更新",
+    title: "标签功能增强",
     changes: [
-      "新增任务拖拽排序功能，支持在四象限之间拖拽调整任务位置",
-      "新增批量操作功能，支持多选任务进行批量删除或移动",
-      "新增快捷键支持，提升操作效率",
-      "新增更新日志入口，查看版本更新历史",
+      "实现标签选择器弹窗，点击标签图标显示已创建标签列表",
+      "实现编辑器内 # 标签提示功能",
+      "实现标签点击跳转到筛选列表",
+      "内容中 #标签 自动提取并添加到便签标签列表",
+      "标签树默认展开所有层级，添加树状连接线",
     ],
   },
   {
     version: "1.2.0",
-    date: "2026-01-28",
-    title: "性能优化",
+    date: "2026-01-27",
+    title: "Markdown 编辑器重构",
     changes: [
-      "优化任务状态更新为异步批量上报模式",
-      "实现乐观更新，点击复选框立即响应",
-      "修复 useEffect 无限循环问题",
+      "集成 TipTap WYSIWYG 编辑器",
+      "实现列表实时渲染（`- ` 转换为圆点）",
+      "实现智能退格删除（空列表项按 Backspace 清除整行）",
+      "实现图片内联显示（上传图片直接显示而非 URL）",
+      "支持图片粘贴上传到云端存储",
     ],
   },
   {
     version: "1.1.0",
-    date: "2026-01-27",
-    title: "待办清单模块",
+    date: "2026-01-26",
+    title: "四象限管理与标签系统",
     changes: [
-      "新增待办清单模块，支持四象限任务管理",
-      "新增今日总结功能，记录收获与反思",
-      "新增智能分析功能，AI 生成工作效率报告",
-      "新增 Prompt 管理功能，自定义 AI 分析模板",
-      "新增历史记录与数据看板，支持年/月/日维度查看",
-      "新增未完成任务延期提示功能",
-      "新增明日计划 AI 自动分配任务功能",
+      "新增四象限视图，按重要/紧急分类",
+      "实现标签层级支持（A/B/C 形式，树状展示）",
+      "标签管理功能（编辑、重命名、移动到其他标签下）",
+      "四象限 TODO 勾选功能",
+      "便签选中交互优化（点击便签/空白处/ESC 取消选中）",
     ],
   },
   {
@@ -56,29 +57,27 @@ const changelog: ChangelogEntry[] = [
     title: "初始版本",
     changes: [
       "便签笔记功能，支持创建、编辑、删除便签",
-      "Markdown 编辑器，支持实时预览",
-      "图片上传功能，支持粘贴上传",
-      "标签管理功能，支持层级标签",
       "颜色分类功能，支持多种颜色主题",
-      "四象限视图，按重要/紧急分类",
       "回收站功能，支持恢复已删除便签",
+      "搜索功能，支持按标题和内容搜索",
+      "响应式设计，支持移动端和桌面端",
     ],
   },
 ];
 
-interface ChangelogDialogProps {
+interface NotesChangelogDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-export function ChangelogDialog({ open, onOpenChange }: ChangelogDialogProps) {
+export function NotesChangelogDialog({ open, onOpenChange }: NotesChangelogDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[80vh]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <span>📋</span>
-            更新日志
+            <span>📝</span>
+            便签笔记更新日志
           </DialogTitle>
         </DialogHeader>
         <ScrollArea className="h-[60vh] pr-4">
@@ -89,11 +88,11 @@ export function ChangelogDialog({ open, onOpenChange }: ChangelogDialogProps) {
                 className="relative pl-6 pb-6 border-l-2 border-muted last:pb-0"
               >
                 {/* Timeline dot */}
-                <div className="absolute -left-[7px] top-1 w-3 h-3 rounded-full bg-primary border-2 border-background" />
+                <div className="absolute -left-[7px] top-1 w-3 h-3 rounded-full bg-amber-500 border-2 border-background" />
                 
                 {/* Version header */}
                 <div className="flex items-center gap-3 mb-2">
-                  <Badge variant={index === 0 ? "default" : "secondary"}>
+                  <Badge variant={index === 0 ? "default" : "secondary"} className={index === 0 ? "bg-amber-500" : ""}>
                     v{entry.version}
                   </Badge>
                   <span className="text-sm text-muted-foreground">
@@ -113,7 +112,7 @@ export function ChangelogDialog({ open, onOpenChange }: ChangelogDialogProps) {
                 <ul className="space-y-1">
                   {entry.changes.map((change, i) => (
                     <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
-                      <span className="text-primary mt-1">•</span>
+                      <span className="text-amber-500 mt-1">•</span>
                       <span>{change}</span>
                     </li>
                   ))}

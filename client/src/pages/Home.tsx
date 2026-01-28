@@ -20,6 +20,8 @@ import {
   Loader2,
 } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback } from "react";
+import { NotesChangelogDialog } from "@/components/NotesChangelogDialog";
+import { FileText } from "lucide-react";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -42,6 +44,7 @@ export default function Home() {
   const [filterTag, setFilterTag] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [showTrash, setShowTrash] = useState(false);
+  const [showChangelog, setShowChangelog] = useState(false);
 
   // tRPC queries
   const utils = trpc.useUtils();
@@ -381,6 +384,19 @@ export default function Home() {
           )}
         </div>
 
+        {/* Changelog */}
+        <div className="px-4 pb-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground"
+            onClick={() => setShowChangelog(true)}
+          >
+            <FileText className="h-4 w-4" />
+            更新日志 v1.3.0
+          </Button>
+        </div>
+
         {/* User Menu */}
         <div className="p-4 border-t border-border/50">
           <DropdownMenu>
@@ -527,6 +543,9 @@ export default function Home() {
           )}
         </div>
       </main>
+
+      {/* Changelog Dialog */}
+      <NotesChangelogDialog open={showChangelog} onOpenChange={setShowChangelog} />
     </div>
   );
 }

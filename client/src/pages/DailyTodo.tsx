@@ -47,16 +47,14 @@ import {
   DragEndEvent,
   DragOverlay,
   DragStartEvent,
-  closestCenter,
+  pointerWithin,
+  rectIntersection,
   PointerSensor,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import {
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
+import { useDraggable } from "@dnd-kit/core";
+import { useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { ChangelogDialog } from "@/components/ChangelogDialog";
 
@@ -141,8 +139,8 @@ function addDays(dateStr: string, days: number): string {
   return date.toISOString().split("T")[0];
 }
 
-// Sortable Task Item Component
-function SortableTaskItem({
+// Draggable Task Item Component
+function DraggableTaskItem({
   task,
   isSelected,
   isSelectionMode,
@@ -164,14 +162,12 @@ function SortableTaskItem({
     listeners,
     setNodeRef,
     transform,
-    transition,
     isDragging,
-  } = useSortable({ id: task.id });
+  } = useDraggable({ id: task.id });
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
+  const style = transform ? {
+    transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+  } : undefined;
 
   return (
     <div
@@ -236,6 +232,33 @@ function SortableTaskItem({
           <Trash2 className="h-3 w-3" />
         </Button>
       </div>
+    </div>
+  );
+}
+
+// Droppable Quadrant Component
+function DroppableQuadrant({
+  quadrant,
+  children,
+  className,
+}: {
+  quadrant: TaskQuadrant;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const { isOver, setNodeRef } = useDroppable({
+    id: `quadrant-${quadrant}`,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        className,
+        isOver && "ring-2 ring-primary ring-offset-2 bg-primary/5"
+      )}
+    >
+      {children}
     </div>
   );
 }
@@ -709,7 +732,7 @@ export default function DailyTodo() {
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCenter}
+      collisionDetection={rectIntersection}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
@@ -797,11 +820,11 @@ export default function DailyTodo() {
             {/* Four Quadrants with Drag & Drop */}
             <div className="grid grid-cols-2 gap-4">
               {(Object.keys(quadrantConfig) as TaskQuadrant[]).map((quadrant) => (
-                <div
+                <DroppableQuadrant
                   key={quadrant}
-                  id={`quadrant-${quadrant}`}
+                  quadrant={quadrant}
                   className={cn(
-                    "rounded-xl p-4 border min-h-[200px]",
+                    "rounded-xl p-4 border min-h-[200px] transition-all",
                     quadrantConfig[quadrant].bgColor
                   )}
                 >
@@ -830,25 +853,20 @@ export default function DailyTodo() {
                     </span>
                   </div>
                   
-                  <SortableContext
-                    items={tasksByQuadrant[quadrant].map(t => t.id)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    <div className="space-y-2">
-                      {tasksByQuadrant[quadrant].map((task: Task) => (
-                        <SortableTaskItem
-                          key={task.id}
-                          task={task}
-                          isSelected={selectedTaskIds.has(task.id)}
-                          isSelectionMode={isSelectionMode}
-                          onToggleComplete={handleToggleComplete}
-                          onEdit={setEditingTask}
-                          onDelete={handleDeleteTask}
-                          onSelect={handleToggleSelection}
-                        />
-                      ))}
-                    </div>
-                  </SortableContext>
+                  <div className="space-y-2 min-h-[60px]">
+                    {tasksByQuadrant[quadrant].map((task: Task) => (
+                      <DraggableTaskItem
+                        key={task.id}
+                        task={task}
+                        isSelected={selectedTaskIds.has(task.id)}
+                        isSelectionMode={isSelectionMode}
+                        onToggleComplete={handleToggleComplete}
+                        onEdit={setEditingTask}
+                        onDelete={handleDeleteTask}
+                        onSelect={handleToggleSelection}
+                      />
+                    ))}
+                  </div>
                   
                   <Button
                     variant="ghost"
@@ -861,7 +879,7 @@ export default function DailyTodo() {
                     <Plus className="h-4 w-4 mr-2" />
                     添加任务
                   </Button>
-                </div>
+                </DroppableQuadrant>
               ))}
             </div>
             
