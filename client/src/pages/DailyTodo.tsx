@@ -177,9 +177,11 @@ export default function DailyTodo() {
   const SYNC_DEBOUNCE_MS = 2000; // 2 seconds debounce
   
   // Sync local tasks with server data (only when server data changes)
+  // Use JSON.stringify to avoid infinite loop from array reference changes
+  const tasksJson = JSON.stringify(tasks);
   useEffect(() => {
-    setLocalTasks(tasks as Task[]);
-  }, [tasks]);
+    setLocalTasks(JSON.parse(tasksJson) as Task[]);
+  }, [tasksJson]);
   
   // Batch update mutation
   const batchUpdateMutation = trpc.dailyTasks.batchUpdate.useMutation({
