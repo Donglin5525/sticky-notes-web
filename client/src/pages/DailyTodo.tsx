@@ -546,17 +546,17 @@ export default function DailyTodo() {
     });
   };
   
-  const handlePrevDay = () => {
-    setSelectedDate(addDays(selectedDate, -1));
-  };
+  const handlePrevDay = useCallback(() => {
+    setSelectedDate(prev => addDays(prev, -1));
+  }, []);
   
-  const handleNextDay = () => {
-    setSelectedDate(addDays(selectedDate, 1));
-  };
+  const handleNextDay = useCallback(() => {
+    setSelectedDate(prev => addDays(prev, 1));
+  }, []);
   
-  const handleToday = () => {
+  const handleToday = useCallback(() => {
     setSelectedDate(getTodayDate());
-  };
+  }, []);
   
   // ==================== Drag & Drop Handlers ====================
   const handleDragStart = (event: DragStartEvent) => {
@@ -725,7 +725,7 @@ export default function DailyTodo() {
     
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isSelectionMode, showAddTaskDialog]);
+  }, [isSelectionMode, showAddTaskDialog, handlePrevDay, handleNextDay, handleToday]);
   
   const isToday = selectedDate === getTodayDate();
   
@@ -907,6 +907,7 @@ export default function DailyTodo() {
               </div>
               
               <div className="grid grid-cols-2 gap-4">
+                {/* 今日收获与反思 */}
                 <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-4">
                   <div className="flex items-center gap-2 mb-3">
                     <span className="text-lg">🎯</span>
@@ -920,7 +921,8 @@ export default function DailyTodo() {
                   />
                 </div>
                 
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4">
+                {/* 明日计划 */}
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 flex flex-col">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <span className="text-lg">📋</span>
@@ -945,8 +947,17 @@ export default function DailyTodo() {
                     value={tomorrowPlan}
                     onChange={(e) => setTomorrowPlan(e.target.value)}
                     placeholder="每行一个任务，AI 会自动分配到四象限..."
-                    className="min-h-[120px] bg-white/70 border-0 focus-visible:ring-blue-300 resize-none"
+                    className="flex-1 min-h-[120px] bg-white/70 border-0 focus-visible:ring-blue-300 resize-none"
                   />
+                  {/* 保存总结按钮 - 放在明日计划区域右下角 */}
+                  <div className="flex justify-end mt-3">
+                    <Button onClick={handleSaveSummary} disabled={upsertSummaryMutation.isPending}>
+                      {upsertSummaryMutation.isPending && (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      )}
+                      保存总结
+                    </Button>
+                  </div>
                 </div>
               </div>
               
@@ -961,15 +972,6 @@ export default function DailyTodo() {
                   </div>
                 </div>
               )}
-              
-              <div className="flex justify-end mt-4">
-                <Button onClick={handleSaveSummary} disabled={upsertSummaryMutation.isPending}>
-                  {upsertSummaryMutation.isPending && (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  )}
-                  保存总结
-                </Button>
-              </div>
             </div>
             
             {/* Changelog Button */}
