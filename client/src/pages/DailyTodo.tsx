@@ -75,28 +75,32 @@ interface Task {
 }
 
 // Quadrant configuration
-const quadrantConfig: Record<TaskQuadrant, { name: string; description: string; color: string; bgColor: string }> = {
+const quadrantConfig: Record<TaskQuadrant, { name: string; description: string; subtitle: string; color: string; bgColor: string }> = {
   priority: {
     name: "优先事项",
     description: "重要且紧急",
+    subtitle: "每天优先、集中精力完成",
     color: "text-red-600",
     bgColor: "bg-red-50 border-red-200",
   },
   strategic: {
     name: "战略项目",
     description: "重要不紧急",
+    subtitle: "长期、持续、有规划地投入",
     color: "text-blue-600",
     bgColor: "bg-blue-50 border-blue-200",
   },
   trivial: {
     name: "琐碎事务",
     description: "紧急不重要",
+    subtitle: "批量处理，攒到一起快速搞定",
     color: "text-amber-600",
     bgColor: "bg-amber-50 border-amber-200",
   },
   trap: {
     name: "陷阱区域",
     description: "不重要不紧急",
+    subtitle: "能拒绝就拒绝，能授权就授权",
     color: "text-gray-500",
     bgColor: "bg-gray-50 border-gray-200",
   },
@@ -282,6 +286,8 @@ export default function DailyTodo() {
   const [showShortcutsDialog, setShowShortcutsDialog] = useState(false);
   const [showChangelogDialog, setShowChangelogDialog] = useState(false);
   const [showBatchMoveDialog, setShowBatchMoveDialog] = useState(false);
+  const [showBatchAddDialog, setShowBatchAddDialog] = useState(false);
+  const [batchAddText, setBatchAddText] = useState("");
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   
   // Batch selection state
@@ -466,6 +472,16 @@ export default function DailyTodo() {
       toast.success(`已为明天创建 ${data.tasks.length} 个任务`);
     },
     onError: () => toast.error("创建任务失败，请重试"),
+  });
+  
+  const batchCreateMutation = trpc.ai.batchCreateWithAI.useMutation({
+    onSuccess: (data) => {
+      utils.dailyTasks.list.invalidate({ date: selectedDate });
+      setShowBatchAddDialog(false);
+      setBatchAddText("");
+      toast.success(`已创建 ${data.tasks.length} 个任务，AI 已自动分配象限`);
+    },
+    onError: () => toast.error("批量创建失败，请重试"),
   });
   
   // Group tasks by quadrant
@@ -834,29 +850,34 @@ export default function DailyTodo() {
                     quadrantConfig[quadrant].bgColor
                   )}
                 >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className={cn("w-3 h-3 rounded-full", {
-                        "bg-red-500": quadrant === "priority",
-                        "bg-blue-500": quadrant === "strategic",
-                        "bg-amber-500": quadrant === "trivial",
-                        "bg-gray-400": quadrant === "trap",
-                      })} />
-                      <h3 className={cn("font-semibold", quadrantConfig[quadrant].color)}>
-                        {quadrantConfig[quadrant].name}
-                      </h3>
-                      <span className="text-xs text-muted-foreground">
-                        {quadrantConfig[quadrant].description}
+                  <div className="mb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className={cn("w-3 h-3 rounded-full", {
+                          "bg-red-500": quadrant === "priority",
+                          "bg-blue-500": quadrant === "strategic",
+                          "bg-amber-500": quadrant === "trivial",
+                          "bg-gray-400": quadrant === "trap",
+                        })} />
+                        <h3 className={cn("font-semibold", quadrantConfig[quadrant].color)}>
+                          {quadrantConfig[quadrant].name}
+                        </h3>
+                        <span className="text-xs text-muted-foreground">
+                          {quadrantConfig[quadrant].description}
+                        </span>
+                      </div>
+                      <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", {
+                        "bg-red-100 text-red-600": quadrant === "priority",
+                        "bg-blue-100 text-blue-600": quadrant === "strategic",
+                        "bg-amber-100 text-amber-600": quadrant === "trivial",
+                        "bg-gray-100 text-gray-600": quadrant === "trap",
+                      })}>
+                        {tasksByQuadrant[quadrant].length} 项
                       </span>
                     </div>
-                    <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", {
-                      "bg-red-100 text-red-600": quadrant === "priority",
-                      "bg-blue-100 text-blue-600": quadrant === "strategic",
-                      "bg-amber-100 text-amber-600": quadrant === "trivial",
-                      "bg-gray-100 text-gray-600": quadrant === "trap",
-                    })}>
-                      {tasksByQuadrant[quadrant].length} 项
-                    </span>
+                    <p className="text-xs text-muted-foreground mt-1 ml-5">
+                      {quadrantConfig[quadrant].subtitle}
+                    </p>
                   </div>
                   
                   <div className="space-y-2 min-h-[60px]">
@@ -887,6 +908,19 @@ export default function DailyTodo() {
                   </Button>
                 </DroppableQuadrant>
               ))}
+            </div>
+            
+            {/* Batch Add Button */}
+            <div className="flex justify-end mt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowBatchAddDialog(true)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                批量新增
+              </Button>
             </div>
             
             {/* Daily Summary */}
@@ -1190,6 +1224,61 @@ export default function DailyTodo() {
               </Button>
               <Button onClick={handleConfirmBatchMove}>
                 确认移动
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        
+        {/* Batch Add Dialog */}
+        <Dialog open={showBatchAddDialog} onOpenChange={setShowBatchAddDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Plus className="h-5 w-5" />
+                批量新增任务
+              </DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <p className="text-sm text-muted-foreground mb-3">
+                每行输入一个任务，AI 会自动识别并分配到对应的四象限
+              </p>
+              <Textarea
+                value={batchAddText}
+                onChange={(e) => setBatchAddText(e.target.value)}
+                placeholder="例如：\n完成项目报告\n回复客户邮件\n学习 React 新特性\n整理桌面文件"
+                className="min-h-[200px] resize-none"
+              />
+              <div className="mt-3 text-xs text-muted-foreground">
+                <p>提示：</p>
+                <ul className="list-disc list-inside mt-1 space-y-1">
+                  <li>优先事项：重要且紧急的任务（如紧急会议、今日截止）</li>
+                  <li>战略项目：重要不紧急的任务（如学习新技能、规划设计）</li>
+                  <li>琐碎事务：紧急不重要的任务（如回复消息、处理邮件）</li>
+                  <li>陷阱区域：不重要不紧急的任务（如无意义的会议）</li>
+                </ul>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowBatchAddDialog(false)}>
+                取消
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!batchAddText.trim()) {
+                    toast.error("请输入任务内容");
+                    return;
+                  }
+                  batchCreateMutation.mutate({
+                    tasksText: batchAddText,
+                    taskDate: selectedDate,
+                  });
+                }}
+                disabled={batchCreateMutation.isPending}
+              >
+                {batchCreateMutation.isPending && (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                )}
+                AI 智能分配
               </Button>
             </DialogFooter>
           </DialogContent>

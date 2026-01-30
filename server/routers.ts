@@ -498,6 +498,84 @@ export const appRouter = router({
         return { analysis: aiAnalysis };
       }),
 
+    /** Batch create tasks with AI classification */
+    batchCreateWithAI: protectedProcedure
+      .input(
+        z.object({
+          tasksText: z.string(),
+          taskDate: z.string(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        // Use LLM to parse the tasks text and assign quadrants
+        const response = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content: `你是一位任务分配助手。用户会给你一段任务文本，每行是一个任务。
+请根据任务内容将每个任务分配到四象限之一:
+- priority: 优先事项（重要且紧急，如：紧急会议、今日截止的任务、客户投诉处理）
+- strategic: 战略项目（重要不紧急，如：学习新技能、规划设计、健康管理、人脉维护）
+- trivial: 琐碎事务（紧急不重要，如：回复消息、处理邮件、日常行政事务）
+- trap: 陷阱区域（不重要不紧急，如：无意义的会议、过度社交媒体、不必要的应酬）
+
+请返回 JSON 数组格式，每个元素包含 title 和 quadrant 字段。`,
+            },
+            { role: "user", content: input.tasksText },
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "tasks",
+              strict: true,
+              schema: {
+                type: "object",
+                properties: {
+                  tasks: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        title: { type: "string" },
+                        quadrant: {
+                          type: "string",
+                          enum: ["priority", "strategic", "trivial", "trap"],
+                        },
+                      },
+                      required: ["title", "quadrant"],
+                      additionalProperties: false,
+                    },
+                  },
+                },
+                required: ["tasks"],
+                additionalProperties: false,
+              },
+            },
+          },
+        });
+
+        const rawContent = response.choices[0]?.message?.content;
+        if (!rawContent || typeof rawContent !== 'string') {
+          throw new Error("解析失败");
+        }
+
+        const parsed = JSON.parse(rawContent) as { tasks: Array<{ title: string; quadrant: TaskQuadrant }> };
+        
+        // Create tasks
+        const createdTasks = [];
+        for (const task of parsed.tasks) {
+          const created = await createTask({
+            userId: ctx.user.id,
+            title: task.title,
+            quadrant: task.quadrant,
+            taskDate: input.taskDate,
+          });
+          createdTasks.push(created);
+        }
+
+        return { tasks: createdTasks };
+      }),
+
     /** Generate tomorrow's tasks from plan text */
     generateTomorrowTasks: protectedProcedure
       .input(
