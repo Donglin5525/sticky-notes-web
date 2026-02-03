@@ -228,3 +228,7 @@
 ## 版本管理自动化
 - [x] 更新日志数据分离 - 将更新日志数据移到 shared/changelog.json
 - [x] 版本号自动递增脚本 - 创建 pnpm version:patch/minor/major 命令
+
+## Git 钩子与发布检查
+- [x] Git 提交钩子 - 添加 pre-commit 钩子 (pnpm prepare 安装)
+- [x] 版本发布检查清单 - 创建 pnpm release:check 命令
