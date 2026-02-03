@@ -6,6 +6,8 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { useEffect, useState } from "react";
+import { APP_VERSION, VERSION_STORAGE_KEY } from "@shared/version";
 
 interface ChangelogEntry {
   version: string;
@@ -14,7 +16,9 @@ interface ChangelogEntry {
   changes: string[];
 }
 
-const changelog: ChangelogEntry[] = [
+// 更新日志数据
+// 发布新版本时，在此数组开头添加新条目，并更新 shared/version.ts 中的版本号
+export const changelog: ChangelogEntry[] = [
   {
     version: "1.4.0",
     date: "2026-02-03",
@@ -31,7 +35,7 @@ const changelog: ChangelogEntry[] = [
     date: "2026-01-28",
     title: "功能增强更新",
     changes: [
-      "新增任务拖拽排序功能，支持在四象限之间拖抽调整任务位置",
+      "新增任务拖拽排序功能，支持在四象限之间拖拽调整任务位置",
       "新增批量操作功能，支持多选任务进行批量删除或移动",
       "新增快捷键支持，提升操作效率",
       "新增更新日志入口，查看版本更新历史",
@@ -82,7 +86,30 @@ interface ChangelogDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+/**
+ * 检查是否有新版本更新
+ * 返回 true 表示用户还没看过当前版本的更新日志
+ */
+export function checkForNewVersion(): boolean {
+  const lastSeenVersion = localStorage.getItem(VERSION_STORAGE_KEY);
+  return lastSeenVersion !== APP_VERSION;
+}
+
+/**
+ * 标记用户已查看当前版本更新日志
+ */
+export function markVersionAsSeen(): void {
+  localStorage.setItem(VERSION_STORAGE_KEY, APP_VERSION);
+}
+
 export function ChangelogDialog({ open, onOpenChange }: ChangelogDialogProps) {
+  // 当弹窗打开时，标记用户已查看
+  useEffect(() => {
+    if (open) {
+      markVersionAsSeen();
+    }
+  }, [open]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[80vh]">
@@ -136,4 +163,31 @@ export function ChangelogDialog({ open, onOpenChange }: ChangelogDialogProps) {
       </DialogContent>
     </Dialog>
   );
+}
+
+/**
+ * 新版本通知 Hook
+ * 在页面加载时检查是否有新版本，如果有则自动弹出更新日志
+ */
+export function useNewVersionNotification() {
+  const [showChangelog, setShowChangelog] = useState(false);
+  const [hasNewVersion, setHasNewVersion] = useState(false);
+
+  useEffect(() => {
+    const isNew = checkForNewVersion();
+    setHasNewVersion(isNew);
+    if (isNew) {
+      // 延迟 500ms 弹出，让页面先加载完成
+      const timer = setTimeout(() => {
+        setShowChangelog(true);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  return {
+    showChangelog,
+    setShowChangelog,
+    hasNewVersion,
+  };
 }
