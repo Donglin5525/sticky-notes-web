@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { NotesChangelogDialog } from "@/components/NotesChangelogDialog";
+import { checkForNewVersion } from "@/components/ChangelogDialog";
+import { APP_VERSION } from "@shared/version";
 import { FileText } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -45,6 +47,16 @@ export default function Home() {
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [showTrash, setShowTrash] = useState(false);
   const [showChangelog, setShowChangelog] = useState(false);
+
+  // 检查新版本，首次访问新版本时自动弹出更新日志
+  useEffect(() => {
+    if (checkForNewVersion()) {
+      const timer = setTimeout(() => {
+        setShowChangelog(true);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   // tRPC queries
   const utils = trpc.useUtils();
@@ -393,7 +405,7 @@ export default function Home() {
             onClick={() => setShowChangelog(true)}
           >
             <FileText className="h-4 w-4" />
-            更新日志 v1.4.0
+            更新日志 v{APP_VERSION}
           </Button>
         </div>
 
