@@ -221,22 +221,7 @@ function DraggableTaskItem({
           {task.title}
         </p>
         {task.notes && (
-          <div className="text-xs text-muted-foreground mt-0.5 whitespace-pre-wrap break-words">
-            {task.notes.split(/(https?:\/\/[^\s]+)/g).map((part, i) => 
-              part.match(/^https?:\/\//) ? (
-                <a 
-                  key={i} 
-                  href={part} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-blue-500 hover:underline"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {part}
-                </a>
-              ) : part
-            )}
-          </div>
+          <p className="text-xs text-muted-foreground truncate mt-0.5">{task.notes}</p>
         )}
         {task.isCarriedOver && (
           <p className="text-xs text-amber-600">延期自 {task.originalDate}</p>
