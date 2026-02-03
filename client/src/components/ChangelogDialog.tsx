@@ -6,8 +6,9 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { APP_VERSION, VERSION_STORAGE_KEY } from "@shared/version";
+import changelogData from "@shared/changelog.json";
 
 interface ChangelogEntry {
   version: string;
@@ -16,70 +17,9 @@ interface ChangelogEntry {
   changes: string[];
 }
 
-// 更新日志数据
-// 发布新版本时，在此数组开头添加新条目，并更新 shared/version.ts 中的版本号
-export const changelog: ChangelogEntry[] = [
-  {
-    version: "1.4.0",
-    date: "2026-02-03",
-    title: "任务管理优化",
-    changes: [
-      "新增批量新增任务功能，支持换行输入多个任务，AI 自动识别分类",
-      "四象限添加副标题描述，帮助理解各象限的使用场景",
-      "任务卡片显示备注内容，方便快速查看任务详情",
-      "修复日期切换时区问题，解决点击箭头日期跳转异常",
-    ],
-  },
-  {
-    version: "1.3.0",
-    date: "2026-01-28",
-    title: "功能增强更新",
-    changes: [
-      "新增任务拖拽排序功能，支持在四象限之间拖拽调整任务位置",
-      "新增批量操作功能，支持多选任务进行批量删除或移动",
-      "新增快捷键支持，提升操作效率",
-      "新增更新日志入口，查看版本更新历史",
-    ],
-  },
-  {
-    version: "1.2.0",
-    date: "2026-01-28",
-    title: "性能优化",
-    changes: [
-      "优化任务状态更新为异步批量上报模式",
-      "实现乐观更新，点击复选框立即响应",
-      "修复 useEffect 无限循环问题",
-    ],
-  },
-  {
-    version: "1.1.0",
-    date: "2026-01-27",
-    title: "待办清单模块",
-    changes: [
-      "新增待办清单模块，支持四象限任务管理",
-      "新增今日总结功能，记录收获与反思",
-      "新增智能分析功能，AI 生成工作效率报告",
-      "新增 Prompt 管理功能，自定义 AI 分析模板",
-      "新增历史记录与数据看板，支持年/月/日维度查看",
-      "新增未完成任务延期提示功能",
-      "新增明日计划 AI 自动分配任务功能",
-    ],
-  },
-  {
-    version: "1.0.0",
-    date: "2026-01-20",
-    title: "初始版本",
-    changes: [
-      "便签笔记功能，支持创建、编辑、删除便签",
-      "Markdown 编辑器，支持实时预览",
-      "图片上传功能，支持粘贴上传",
-      "标签管理功能，支持层级标签",
-      "颜色分类功能，支持多种颜色主题",
-      "四象限视图，按重要/紧急分类",
-      "回收站功能，支持恢复已删除便签",
-    ],
-  },
-];
+// 从 JSON 文件读取更新日志数据
+// 发布新版本时，只需修改 shared/changelog.json 和 shared/version.ts
+export const changelog: ChangelogEntry[] = changelogData.entries;
 
 interface ChangelogDialogProps {
   open: boolean;
@@ -163,31 +103,4 @@ export function ChangelogDialog({ open, onOpenChange }: ChangelogDialogProps) {
       </DialogContent>
     </Dialog>
   );
-}
-
-/**
- * 新版本通知 Hook
- * 在页面加载时检查是否有新版本，如果有则自动弹出更新日志
- */
-export function useNewVersionNotification() {
-  const [showChangelog, setShowChangelog] = useState(false);
-  const [hasNewVersion, setHasNewVersion] = useState(false);
-
-  useEffect(() => {
-    const isNew = checkForNewVersion();
-    setHasNewVersion(isNew);
-    if (isNew) {
-      // 延迟 500ms 弹出，让页面先加载完成
-      const timer = setTimeout(() => {
-        setShowChangelog(true);
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, []);
-
-  return {
-    showChangelog,
-    setShowChangelog,
-    hasNewVersion,
-  };
 }

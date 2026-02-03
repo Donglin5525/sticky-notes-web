@@ -224,3 +224,7 @@
 
 ## 待发布更新（下一版本）
 <!-- 在这里记录待发布的功能更新，发布时移动到 ChangelogDialog.tsx -->
+
+## 版本管理自动化
+- [x] 更新日志数据分离 - 将更新日志数据移到 shared/changelog.json
+- [x] 版本号自动递增脚本 - 创建 pnpm version:patch/minor/major 命令
