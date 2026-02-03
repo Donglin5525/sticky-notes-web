@@ -219,6 +219,9 @@ function DraggableTaskItem({
         >
           {task.title}
         </p>
+        {task.notes && (
+          <p className="text-xs text-muted-foreground truncate mt-0.5">{task.notes}</p>
+        )}
         {task.isCarriedOver && (
           <p className="text-xs text-amber-600">延期自 {task.originalDate}</p>
         )}
