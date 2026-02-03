@@ -393,7 +393,7 @@ export default function Home() {
             onClick={() => setShowChangelog(true)}
           >
             <FileText className="h-4 w-4" />
-            更新日志 v1.3.0
+            更新日志 v1.4.0
           </Button>
         </div>
 
