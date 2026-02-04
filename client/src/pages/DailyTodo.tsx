@@ -221,7 +221,25 @@ function DraggableTaskItem({
           {task.title}
         </p>
         {task.notes && (
-          <p className="text-xs text-muted-foreground truncate mt-0.5">{task.notes}</p>
+          <div className="text-xs text-muted-foreground mt-0.5 whitespace-pre-wrap break-words">
+            {task.notes.split(/(https?:\/\/[^\s]+)/g).map((part, index) => {
+              if (part.match(/^https?:\/\//)) {
+                return (
+                  <a
+                    key={index}
+                    href={part}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-500 hover:underline"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {part}
+                  </a>
+                );
+              }
+              return part;
+            })}
+          </div>
         )}
         {task.isCarriedOver && (
           <p className="text-xs text-amber-600">延期自 {task.originalDate}</p>
