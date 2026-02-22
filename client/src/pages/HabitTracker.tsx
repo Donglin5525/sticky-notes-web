@@ -535,7 +535,7 @@ function HabitCard({
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-2.5">
           <div
-            className="cursor-grab active:cursor-grabbing p-0.5 -ml-1 opacity-0 group-hover:opacity-40 transition-opacity"
+            className="cursor-grab active:cursor-grabbing p-0.5 -ml-1 opacity-30 hover:opacity-60 transition-opacity"
             onClick={(e) => e.stopPropagation()}
           >
             <GripVertical className="h-4 w-4" />
@@ -556,7 +556,7 @@ function HabitCard({
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-            <button className="p-1 rounded-lg opacity-40 sm:opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-100">
+            <button className="p-1 rounded-lg opacity-60 hover:opacity-100 transition-opacity hover:bg-gray-100">
               <MoreHorizontal className="h-4 w-4 text-gray-400" />
             </button>
           </DropdownMenuTrigger>
