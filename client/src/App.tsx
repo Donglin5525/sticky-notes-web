@@ -6,9 +6,10 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import DailyTodo from "./pages/DailyTodo";
+import HabitTracker from "./pages/HabitTracker";
 import { useAuth } from "./_core/hooks/useAuth";
 import { cn } from "./lib/utils";
-import { StickyNote, CheckSquare, Loader2 } from "lucide-react";
+import { StickyNote, CheckSquare, Loader2, Target } from "lucide-react";
 import { getLoginUrl } from "./const";
 import { Button } from "./components/ui/button";
 
@@ -56,6 +57,7 @@ function MainLayout() {
   
   const isNotesTab = location === "/" || location === "/notes";
   const isTodoTab = location === "/todo";
+  const isHabitTab = location === "/habits";
   
   return (
     <div className="flex h-screen overflow-hidden">
@@ -112,6 +114,24 @@ function MainLayout() {
                 </p>
               </div>
             </button>
+            
+            <button
+              onClick={() => setLocation("/habits")}
+              className={cn(
+                "flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-left",
+                isHabitTab
+                  ? "bg-primary text-primary-foreground shadow-md"
+                  : "hover:bg-muted text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Target className="h-5 w-5" />
+              <div>
+                <p className="font-medium">习惯打卡</p>
+                <p className={cn("text-xs", isHabitTab ? "text-primary-foreground/70" : "text-muted-foreground")}>
+                  追踪与量化习惯
+                </p>
+              </div>
+            </button>
           </div>
         </div>
         
@@ -125,6 +145,7 @@ function MainLayout() {
           <Route path="/" component={Home} />
           <Route path="/notes" component={Home} />
           <Route path="/todo" component={DailyTodo} />
+          <Route path="/habits" component={HabitTracker} />
           <Route path="/404" component={NotFound} />
           <Route component={NotFound} />
         </Switch>

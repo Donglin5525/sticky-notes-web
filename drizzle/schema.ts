@@ -153,3 +153,56 @@ export const promptTemplates = mysqlTable("prompt_templates", {
 
 export type PromptTemplate = typeof promptTemplates.$inferSelect;
 export type InsertPromptTemplate = typeof promptTemplates.$inferInsert;
+
+// ==================== Habit Tracker Module ====================
+
+/**
+ * Habit type:
+ * - count: 频次计数类 (如抽烟、喝水)
+ * - value: 连续数值类 (如体重、血压)
+ */
+export type HabitType = "count" | "value";
+
+/**
+ * Habits table - stores user-defined habits
+ */
+export const habits = mysqlTable("habits", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Foreign key to users table */
+  userId: int("userId").notNull(),
+  /** Habit name (e.g., 抽烟、体重) */
+  name: varchar("name", { length: 100 }).notNull(),
+  /** Habit type: count (频次) or value (数值) */
+  type: mysqlEnum("type", ["count", "value"]).notNull(),
+  /** Sort order for drag-and-drop */
+  sortOrder: int("sortOrder").default(0).notNull(),
+  /** Whether this habit is archived */
+  isArchived: boolean("isArchived").default(false).notNull(),
+  /** Soft delete flag */
+  isDeleted: boolean("isDeleted").default(false).notNull(),
+  /** Created timestamp (Unix ms) */
+  createdAt: bigint("createdAt", { mode: "number" }).notNull(),
+});
+
+export type Habit = typeof habits.$inferSelect;
+export type InsertHabit = typeof habits.$inferInsert;
+
+/**
+ * Habit records table - event stream of habit check-ins
+ */
+export const habitRecords = mysqlTable("habit_records", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Foreign key to habits table */
+  habitId: int("habitId").notNull(),
+  /** Record value: 1 for count type, actual number for value type (e.g., 75.5) */
+  value: text("value").notNull(),
+  /** Optional note (e.g., 练胸背、心情烦躁) */
+  note: text("note"),
+  /** Timestamp when the record occurred (Unix ms) - allows backdating */
+  timestamp: bigint("timestamp", { mode: "number" }).notNull(),
+  /** Created timestamp (Unix ms) */
+  createdAt: bigint("createdAt", { mode: "number" }).notNull(),
+});
+
+export type HabitRecord = typeof habitRecords.$inferSelect;
+export type InsertHabitRecord = typeof habitRecords.$inferInsert;
