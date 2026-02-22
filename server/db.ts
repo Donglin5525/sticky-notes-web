@@ -1,4 +1,4 @@
-import { eq, and, desc, asc, gte, lt, sql } from "drizzle-orm";
+import { eq, and, or, desc, asc, gte, lt, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { 
   InsertUser, users, notes, InsertNote, Note,
@@ -850,7 +850,7 @@ export async function getUserHabits(userId: number) {
     .orderBy(asc(habits.sortOrder), desc(habits.createdAt));
 }
 
-/** Get archived habits for a user */
+/** Get archived habits for a user (includes both archived and soft-deleted) */
 export async function getArchivedHabits(userId: number) {
   const db = await getDb();
   if (!db) return [];
@@ -858,7 +858,7 @@ export async function getArchivedHabits(userId: number) {
   return db
     .select()
     .from(habits)
-    .where(and(eq(habits.userId, userId), eq(habits.isArchived, true), eq(habits.isDeleted, false)))
+    .where(and(eq(habits.userId, userId), or(eq(habits.isArchived, true), eq(habits.isDeleted, true))))
     .orderBy(desc(habits.createdAt));
 }
 
@@ -929,7 +929,7 @@ export async function restoreHabit(habitId: number, userId: number) {
   const db = await getDb();
   if (!db) throw new Error("[Database] Cannot restore habit: database not available");
 
-  await db.update(habits).set({ isArchived: false }).where(and(eq(habits.id, habitId), eq(habits.userId, userId)));
+  await db.update(habits).set({ isArchived: false, isDeleted: false }).where(and(eq(habits.id, habitId), eq(habits.userId, userId)));
   return getHabitById(habitId, userId);
 }
 
