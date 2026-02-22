@@ -33,6 +33,24 @@ import {
   updatePromptTemplate,
   deletePromptTemplate,
   getDefaultPromptTemplate,
+  // Habit Tracker functions
+  getUserHabits,
+  getArchivedHabits,
+  getHabitById,
+  createHabit,
+  updateHabit,
+  archiveHabit,
+  restoreHabit,
+  softDeleteHabit,
+  permanentlyDeleteHabit,
+  updateHabitSortOrders,
+  addQuickRecord,
+  addDetailedRecord,
+  getHabitRecords,
+  getLatestRecord,
+  getTodayRecordCount,
+  getTodayValueSum,
+  deleteRecord,
 } from "./db";
 import { invokeLLM } from "./_core/llm";
 import { TaskQuadrant } from "../drizzle/schema";
@@ -652,6 +670,147 @@ export const appRouter = router({
         }
 
         return { tasks: createdTasks };
+      }),
+  }),
+
+  // ==================== Habit Tracker ====================
+  habits: router({
+    /** Get all active habits with today's stats */
+    list: protectedProcedure.query(async ({ ctx }) => {
+      const habitsList = await getUserHabits(ctx.user.id);
+      
+      // Enrich with today's stats and latest record
+      const enriched = await Promise.all(
+        habitsList.map(async (habit) => {
+          const todayCount = await getTodayRecordCount(habit.id);
+          const todaySum = await getTodayValueSum(habit.id);
+          const latest = await getLatestRecord(habit.id);
+          return {
+            ...habit,
+            todayCount,
+            todaySum,
+            latestRecord: latest || null,
+          };
+        })
+      );
+      return enriched;
+    }),
+
+    /** Get archived habits */
+    archived: protectedProcedure.query(async ({ ctx }) => {
+      return getArchivedHabits(ctx.user.id);
+    }),
+
+    /** Create a new habit */
+    create: protectedProcedure
+      .input(z.object({
+        name: z.string().min(1).max(100),
+        type: z.enum(["count", "value"]),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return createHabit({ userId: ctx.user.id, name: input.name, type: input.type });
+      }),
+
+    /** Update a habit */
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().min(1).max(100).optional(),
+        type: z.enum(["count", "value"]).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return updateHabit(input.id, ctx.user.id, {
+          name: input.name,
+          type: input.type,
+        });
+      }),
+
+    /** Archive a habit */
+    archive: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        return archiveHabit(input.id, ctx.user.id);
+      }),
+
+    /** Restore a habit from archive */
+    restore: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        return restoreHabit(input.id, ctx.user.id);
+      }),
+
+    /** Soft delete a habit */
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        return softDeleteHabit(input.id, ctx.user.id);
+      }),
+
+    /** Permanently delete a habit and all records */
+    permanentDelete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        return permanentlyDeleteHabit(input.id, ctx.user.id);
+      }),
+
+    /** Update sort orders for drag-and-drop */
+    updateSortOrders: protectedProcedure
+      .input(z.object({
+        orders: z.array(z.object({ id: z.number(), sortOrder: z.number() })),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return updateHabitSortOrders(ctx.user.id, input.orders);
+      }),
+
+    /** Quick +1 record for count-type habits */
+    quickRecord: protectedProcedure
+      .input(z.object({ habitId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        // Verify ownership
+        const habit = await getHabitById(input.habitId, ctx.user.id);
+        if (!habit) throw new Error("Habit not found");
+        return addQuickRecord(input.habitId);
+      }),
+
+    /** Add a detailed record */
+    addRecord: protectedProcedure
+      .input(z.object({
+        habitId: z.number(),
+        value: z.string(),
+        note: z.string().optional(),
+        timestamp: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const habit = await getHabitById(input.habitId, ctx.user.id);
+        if (!habit) throw new Error("Habit not found");
+        return addDetailedRecord({
+          habitId: input.habitId,
+          value: input.value,
+          note: input.note,
+          timestamp: input.timestamp,
+        });
+      }),
+
+    /** Get records for a habit within a time range */
+    getRecords: protectedProcedure
+      .input(z.object({
+        habitId: z.number(),
+        startTime: z.number(),
+        endTime: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const habit = await getHabitById(input.habitId, ctx.user.id);
+        if (!habit) throw new Error("Habit not found");
+        return getHabitRecords(input.habitId, input.startTime, input.endTime);
+      }),
+
+    /** Delete a specific record */
+    deleteRecord: protectedProcedure
+      .input(z.object({ recordId: z.number(), habitId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const habit = await getHabitById(input.habitId, ctx.user.id);
+        if (!habit) throw new Error("Habit not found");
+        return deleteRecord(input.recordId);
       }),
   }),
 });

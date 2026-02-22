@@ -833,3 +833,289 @@ export async function getDefaultPromptTemplate(userId: number) {
 
   return result.length > 0 ? result[0] : null;
 }
+
+// ==================== Habit Tracker CRUD ====================
+
+import { habits, habitRecords, InsertHabit, Habit, InsertHabitRecord, HabitRecord } from "../drizzle/schema";
+
+/** Get all active habits for a user (not archived, not deleted) */
+export async function getUserHabits(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db
+    .select()
+    .from(habits)
+    .where(and(eq(habits.userId, userId), eq(habits.isArchived, false), eq(habits.isDeleted, false)))
+    .orderBy(asc(habits.sortOrder), desc(habits.createdAt));
+}
+
+/** Get archived habits for a user */
+export async function getArchivedHabits(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db
+    .select()
+    .from(habits)
+    .where(and(eq(habits.userId, userId), eq(habits.isArchived, true), eq(habits.isDeleted, false)))
+    .orderBy(desc(habits.createdAt));
+}
+
+/** Get a single habit by ID */
+export async function getHabitById(habitId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db
+    .select()
+    .from(habits)
+    .where(and(eq(habits.id, habitId), eq(habits.userId, userId)))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : undefined;
+}
+
+/** Create a new habit */
+export async function createHabit(data: { userId: number; name: string; type: "count" | "value" }) {
+  const db = await getDb();
+  if (!db) throw new Error("[Database] Cannot create habit: database not available");
+
+  // Get max sort order
+  const existing = await getUserHabits(data.userId);
+  const maxSort = existing.length > 0 ? Math.max(...existing.map(h => h.sortOrder)) : -1;
+
+  const now = Date.now();
+  const result = await db.insert(habits).values({
+    userId: data.userId,
+    name: data.name,
+    type: data.type,
+    sortOrder: maxSort + 1,
+    isArchived: false,
+    isDeleted: false,
+    createdAt: now,
+  });
+
+  return getHabitById(result[0].insertId, data.userId);
+}
+
+/** Update a habit */
+export async function updateHabit(habitId: number, userId: number, updates: { name?: string; type?: "count" | "value" }) {
+  const db = await getDb();
+  if (!db) throw new Error("[Database] Cannot update habit: database not available");
+
+  const updateData: Record<string, unknown> = {};
+  if (updates.name !== undefined) updateData.name = updates.name;
+  if (updates.type !== undefined) updateData.type = updates.type;
+
+  if (Object.keys(updateData).length > 0) {
+    await db.update(habits).set(updateData).where(and(eq(habits.id, habitId), eq(habits.userId, userId)));
+  }
+
+  return getHabitById(habitId, userId);
+}
+
+/** Archive a habit */
+export async function archiveHabit(habitId: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("[Database] Cannot archive habit: database not available");
+
+  await db.update(habits).set({ isArchived: true }).where(and(eq(habits.id, habitId), eq(habits.userId, userId)));
+  return getHabitById(habitId, userId);
+}
+
+/** Restore a habit from archive */
+export async function restoreHabit(habitId: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("[Database] Cannot restore habit: database not available");
+
+  await db.update(habits).set({ isArchived: false }).where(and(eq(habits.id, habitId), eq(habits.userId, userId)));
+  return getHabitById(habitId, userId);
+}
+
+/** Soft delete a habit */
+export async function softDeleteHabit(habitId: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("[Database] Cannot delete habit: database not available");
+
+  await db.update(habits).set({ isDeleted: true }).where(and(eq(habits.id, habitId), eq(habits.userId, userId)));
+  return true;
+}
+
+/** Permanently delete a habit and all its records */
+export async function permanentlyDeleteHabit(habitId: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("[Database] Cannot delete habit: database not available");
+
+  // Verify ownership
+  const habit = await getHabitById(habitId, userId);
+  if (!habit) throw new Error("Habit not found");
+
+  // Delete all records first
+  await db.delete(habitRecords).where(eq(habitRecords.habitId, habitId));
+  // Then delete the habit
+  await db.delete(habits).where(and(eq(habits.id, habitId), eq(habits.userId, userId)));
+  return true;
+}
+
+/** Update habit sort orders (for drag-and-drop) */
+export async function updateHabitSortOrders(userId: number, orders: { id: number; sortOrder: number }[]) {
+  const db = await getDb();
+  if (!db) throw new Error("[Database] Cannot update sort orders: database not available");
+
+  for (const order of orders) {
+    await db
+      .update(habits)
+      .set({ sortOrder: order.sortOrder })
+      .where(and(eq(habits.id, order.id), eq(habits.userId, userId)));
+  }
+  return true;
+}
+
+// ==================== Habit Records CRUD ====================
+
+/** Add a quick +1 record for a count-type habit */
+export async function addQuickRecord(habitId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("[Database] Cannot add record: database not available");
+
+  const now = Date.now();
+  const result = await db.insert(habitRecords).values({
+    habitId,
+    value: "1",
+    note: null,
+    timestamp: now,
+    createdAt: now,
+  });
+
+  return getRecordById(result[0].insertId);
+}
+
+/** Add a detailed record */
+export async function addDetailedRecord(data: {
+  habitId: number;
+  value: string;
+  note?: string;
+  timestamp: number;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("[Database] Cannot add record: database not available");
+
+  const now = Date.now();
+  const result = await db.insert(habitRecords).values({
+    habitId: data.habitId,
+    value: data.value,
+    note: data.note || null,
+    timestamp: data.timestamp,
+    createdAt: now,
+  });
+
+  return getRecordById(result[0].insertId);
+}
+
+/** Get a single record by ID */
+export async function getRecordById(recordId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db
+    .select()
+    .from(habitRecords)
+    .where(eq(habitRecords.id, recordId))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : undefined;
+}
+
+/** Get records for a habit within a time range */
+export async function getHabitRecords(habitId: number, startTime: number, endTime: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db
+    .select()
+    .from(habitRecords)
+    .where(
+      and(
+        eq(habitRecords.habitId, habitId),
+        gte(habitRecords.timestamp, startTime),
+        lt(habitRecords.timestamp, endTime)
+      )
+    )
+    .orderBy(desc(habitRecords.timestamp));
+}
+
+/** Get the latest record for a habit */
+export async function getLatestRecord(habitId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db
+    .select()
+    .from(habitRecords)
+    .where(eq(habitRecords.habitId, habitId))
+    .orderBy(desc(habitRecords.timestamp))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : undefined;
+}
+
+/** Get today's records count for a habit */
+export async function getTodayRecordCount(habitId: number) {
+  const db = await getDb();
+  if (!db) return 0;
+
+  // Calculate today's start in Beijing time (UTC+8)
+  const now = new Date();
+  const beijingOffset = 8 * 60;
+  const localOffset = now.getTimezoneOffset();
+  const beijingTime = new Date(now.getTime() + (beijingOffset + localOffset) * 60 * 1000);
+  const todayStart = new Date(beijingTime.getFullYear(), beijingTime.getMonth(), beijingTime.getDate());
+  const todayStartUtc = todayStart.getTime() - (beijingOffset + localOffset) * 60 * 1000;
+
+  const result = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(habitRecords)
+    .where(
+      and(
+        eq(habitRecords.habitId, habitId),
+        gte(habitRecords.timestamp, todayStartUtc)
+      )
+    );
+
+  return result[0]?.count || 0;
+}
+
+/** Get today's total value sum for a habit */
+export async function getTodayValueSum(habitId: number) {
+  const db = await getDb();
+  if (!db) return 0;
+
+  const now = new Date();
+  const beijingOffset = 8 * 60;
+  const localOffset = now.getTimezoneOffset();
+  const beijingTime = new Date(now.getTime() + (beijingOffset + localOffset) * 60 * 1000);
+  const todayStart = new Date(beijingTime.getFullYear(), beijingTime.getMonth(), beijingTime.getDate());
+  const todayStartUtc = todayStart.getTime() - (beijingOffset + localOffset) * 60 * 1000;
+
+  const result = await db
+    .select({ total: sql<string>`COALESCE(SUM(CAST(value AS DECIMAL(10,2))), 0)` })
+    .from(habitRecords)
+    .where(
+      and(
+        eq(habitRecords.habitId, habitId),
+        gte(habitRecords.timestamp, todayStartUtc)
+      )
+    );
+
+  return parseFloat(result[0]?.total || "0");
+}
+
+/** Delete a specific record */
+export async function deleteRecord(recordId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("[Database] Cannot delete record: database not available");
+
+  await db.delete(habitRecords).where(eq(habitRecords.id, recordId));
+  return true;
+}
