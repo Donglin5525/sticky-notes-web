@@ -556,7 +556,7 @@ function HabitCard({
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-            <button className="p-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-100">
+            <button className="p-1 rounded-lg opacity-40 sm:opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-100">
               <MoreHorizontal className="h-4 w-4 text-gray-400" />
             </button>
           </DropdownMenuTrigger>
@@ -1266,7 +1266,7 @@ function ArchiveView({
   onRestore,
   onPermanentDelete,
 }: {
-  habits: { id: number; name: string; type: "count" | "value"; createdAt: number }[];
+  habits: { id: number; name: string; type: "count" | "value"; createdAt: number; isArchived: boolean; isDeleted: boolean }[];
   isLoading: boolean;
   onRestore: (id: number) => void;
   onPermanentDelete: (id: number) => void;
@@ -1308,7 +1308,15 @@ function ArchiveView({
               {habit.type === "count" ? <Hash className="h-4 w-4" /> : <TrendingUp className="h-4 w-4" />}
             </div>
             <div>
-              <h3 className="font-medium text-gray-900">{habit.name}</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="font-medium text-gray-900">{habit.name}</h3>
+                <span className={cn(
+                  "text-[10px] px-1.5 py-0.5 rounded-full font-medium",
+                  habit.isDeleted ? "bg-red-50 text-red-400" : "bg-amber-50 text-amber-500"
+                )}>
+                  {habit.isDeleted ? "已删除" : "已归档"}
+                </span>
+              </div>
               <p className="text-xs text-gray-400">
                 创建于 {new Date(habit.createdAt).toLocaleDateString("zh-CN")}
               </p>

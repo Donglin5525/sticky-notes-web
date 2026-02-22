@@ -249,9 +249,47 @@ describe("habits", () => {
       const result = await caller.habits.delete({ id: createdHabitId });
       expect(result).toBe(true);
 
+      // Should not appear in active list
       const habits = await caller.habits.list();
       const found = habits.find((h) => h.id === createdHabitId);
       expect(found).toBeUndefined();
+    });
+
+    it("should show soft-deleted habit in archived list", async () => {
+      const { ctx } = createAuthContext();
+      const caller = appRouter.createCaller(ctx);
+
+      const archived = await caller.habits.archived();
+      const found = archived.find((h) => h.id === createdHabitId);
+      expect(found).toBeDefined();
+      expect(found?.isDeleted).toBe(true);
+    });
+
+    it("should restore a soft-deleted habit back to active list", async () => {
+      const { ctx } = createAuthContext();
+      const caller = appRouter.createCaller(ctx);
+
+      // Restore the soft-deleted habit
+      const restored = await caller.habits.restore({ id: createdHabitId });
+      expect(restored).toBeDefined();
+
+      // Should appear in active list again
+      const habits = await caller.habits.list();
+      const found = habits.find((h) => h.id === createdHabitId);
+      expect(found).toBeDefined();
+
+      // Should no longer appear in archived list
+      const archived = await caller.habits.archived();
+      const archivedFound = archived.find((h) => h.id === createdHabitId);
+      expect(archivedFound).toBeUndefined();
+    });
+
+    it("should soft delete again for permanent delete test", async () => {
+      const { ctx } = createAuthContext();
+      const caller = appRouter.createCaller(ctx);
+
+      const result = await caller.habits.delete({ id: createdHabitId });
+      expect(result).toBe(true);
     });
 
     it("should permanently delete a habit", async () => {
