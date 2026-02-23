@@ -105,6 +105,20 @@ describe("habits", () => {
       expect(countHabit?.todaySum).toBeDefined();
     });
 
+    it("should include previousRecord field for trend comparison", async () => {
+      const { ctx } = createAuthContext();
+      const caller = appRouter.createCaller(ctx);
+
+      const result = await caller.habits.list();
+      expect(result.length).toBeGreaterThanOrEqual(1);
+
+      // Every habit in list should have previousRecord field (can be null)
+      for (const habit of result) {
+        expect(habit).toHaveProperty("previousRecord");
+        expect(habit).toHaveProperty("latestRecord");
+      }
+    });
+
     it("should reject unauthenticated requests", async () => {
       const { ctx } = createUnauthContext();
       const caller = appRouter.createCaller(ctx);
