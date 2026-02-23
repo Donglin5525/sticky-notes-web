@@ -50,6 +50,7 @@ import {
   getLatestRecord,
   getTodayRecordCount,
   getTodayValueSum,
+  getPreviousRecord,
   deleteRecord,
 } from "./db";
 import { invokeLLM } from "./_core/llm";
@@ -679,17 +680,19 @@ export const appRouter = router({
     list: protectedProcedure.query(async ({ ctx }) => {
       const habitsList = await getUserHabits(ctx.user.id);
       
-      // Enrich with today's stats and latest record
+      // Enrich with today's stats, latest record, and previous record for trend
       const enriched = await Promise.all(
         habitsList.map(async (habit) => {
           const todayCount = await getTodayRecordCount(habit.id);
           const todaySum = await getTodayValueSum(habit.id);
           const latest = await getLatestRecord(habit.id);
+          const previous = await getPreviousRecord(habit.id);
           return {
             ...habit,
             todayCount,
             todaySum,
             latestRecord: latest || null,
+            previousRecord: previous || null,
           };
         })
       );

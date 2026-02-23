@@ -1060,6 +1060,21 @@ export async function getLatestRecord(habitId: number) {
   return result.length > 0 ? result[0] : undefined;
 }
 
+/** Get the previous (second latest) record for a habit, used for trend comparison */
+export async function getPreviousRecord(habitId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db
+    .select()
+    .from(habitRecords)
+    .where(eq(habitRecords.habitId, habitId))
+    .orderBy(desc(habitRecords.timestamp))
+    .limit(2);
+
+  return result.length > 1 ? result[1] : undefined;
+}
+
 /** Get today's records count for a habit */
 export async function getTodayRecordCount(habitId: number) {
   const db = await getDb();

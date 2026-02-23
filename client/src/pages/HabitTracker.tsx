@@ -53,6 +53,9 @@ import {
   Loader2,
   AlertTriangle,
   Target,
+  ArrowUp,
+  ArrowDown,
+  Minus,
 } from "lucide-react";
 
 // ==================== Types ====================
@@ -68,6 +71,14 @@ type HabitWithStats = {
   todayCount: number;
   todaySum: number;
   latestRecord: {
+    id: number;
+    habitId: number;
+    value: string;
+    note: string | null;
+    timestamp: number;
+    createdAt: number;
+  } | null;
+  previousRecord: {
     id: number;
     habitId: number;
     value: string;
@@ -585,11 +596,37 @@ function HabitCard({
       <div className="flex items-end justify-between">
         <div>
           <p className="text-3xl font-bold text-gray-900 tabular-nums">
-            {isCount ? habit.todayCount : habit.todaySum > 0 ? habit.todaySum : "—"}
+            {isCount ? habit.todayCount : habit.latestRecord ? habit.latestRecord.value : "—"}
           </p>
-          <p className="text-xs text-gray-400 mt-1">
-            {isCount ? "今日次数" : habit.latestRecord ? `最近: ${habit.latestRecord.value}` : "暂无记录"}
-          </p>
+          <div className="flex items-center gap-1 mt-1">
+            {isCount ? (
+              <p className="text-xs text-gray-400">今日次数</p>
+            ) : habit.latestRecord && habit.previousRecord ? (() => {
+              const current = parseFloat(habit.latestRecord.value);
+              const prev = parseFloat(habit.previousRecord.value);
+              const diff = current - prev;
+              if (diff > 0) return (
+                <span className="flex items-center gap-0.5 text-xs text-red-500">
+                  <ArrowUp className="h-3 w-3" />
+                  +{diff.toFixed(1)}
+                </span>
+              );
+              if (diff < 0) return (
+                <span className="flex items-center gap-0.5 text-xs text-emerald-500">
+                  <ArrowDown className="h-3 w-3" />
+                  {diff.toFixed(1)}
+                </span>
+              );
+              return (
+                <span className="flex items-center gap-0.5 text-xs text-gray-400">
+                  <Minus className="h-3 w-3" />
+                  持平
+                </span>
+              );
+            })() : (
+              <p className="text-xs text-gray-400">{habit.latestRecord ? "最新记录" : "暂无记录"}</p>
+            )}
+          </div>
         </div>
 
         {isCount && (
