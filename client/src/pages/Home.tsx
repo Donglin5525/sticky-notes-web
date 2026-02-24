@@ -364,7 +364,7 @@ export default function Home() {
               <p>回收站为空</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className="flex flex-col gap-2 md:grid md:grid-cols-2 xl:grid-cols-3 md:gap-4">
               {trashedNotes.map((note: Note) => (
                 <NoteCard
                   key={note.id}
@@ -399,7 +399,7 @@ export default function Home() {
               </Button>
             </div>
           ) : (
-            <div className="flex flex-col gap-2 max-w-3xl">
+            <div className="flex flex-col gap-2 md:gap-2 max-w-3xl">
               {filteredNotes.map((note: Note) => (
                 <NoteCard
                   key={note.id}

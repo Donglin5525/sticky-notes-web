@@ -155,7 +155,7 @@ export function QuadrantView({
   }, {} as Record<Quadrant, Note[]>);
 
   return (
-    <div className="grid grid-cols-2 gap-4 h-full p-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 h-full p-3 md:p-4 overflow-auto">
       {quadrantOrder.map((quadrant) => {
         const config = quadrantConfig[quadrant];
         const quadrantNotes = groupedNotes[quadrant];
@@ -170,14 +170,14 @@ export function QuadrantView({
             )}
           >
             {/* Quadrant Header */}
-            <div className="p-4 border-b border-black/5 bg-white/30">
+            <div className="p-3 md:p-4 border-b border-black/5 bg-white/30">
               <div className="flex items-center gap-2">
-                <span className="text-2xl">{config.icon}</span>
+                <span className="text-xl md:text-2xl">{config.icon}</span>
                 <div>
-                  <h3 className={cn("font-bold text-lg", config.textColor)}>
+                  <h3 className={cn("font-bold text-base md:text-lg", config.textColor)}>
                     {config.label}
                   </h3>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-[11px] md:text-xs text-muted-foreground">
                     {config.description} · {quadrantNotes.length} 项
                   </p>
                 </div>
