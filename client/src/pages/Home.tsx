@@ -18,6 +18,9 @@ import {
   LogOut,
   User,
   Loader2,
+  Filter,
+  X,
+  ChevronDown,
 } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { NotesChangelogDialog } from "@/components/NotesChangelogDialog";
@@ -35,11 +38,20 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { TagTree } from "@/components/TagTree";
+import { useIsMobile } from "@/hooks/useMobile";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 
 type ViewMode = "list" | "quadrant";
 
 export default function Home() {
   const { user, logout } = useAuth();
+  const isMobile = useIsMobile();
   const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterColor, setFilterColor] = useState<NoteColor | "all">("all");
@@ -47,6 +59,8 @@ export default function Home() {
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [showTrash, setShowTrash] = useState(false);
   const [showChangelog, setShowChangelog] = useState(false);
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
 
   // 检查新版本，首次访问新版本时自动弹出更新日志
   useEffect(() => {
@@ -80,31 +94,23 @@ export default function Home() {
 
   const updateNoteMutation = trpc.notes.update.useMutation({
     onMutate: async (newData) => {
-      // Cancel outgoing refetches
       await utils.notes.list.cancel();
-      
-      // Snapshot previous value
       const previousNotes = utils.notes.list.getData();
-      
-      // Optimistically update
       utils.notes.list.setData(undefined, (old) => {
         if (!old) return old;
-        return old.map((note: Note) => 
+        return old.map((note: Note) =>
           note.id === newData.id ? { ...note, ...newData, updatedAt: Date.now() } : note
         );
       });
-      
       return { previousNotes };
     },
     onError: (err, newData, context) => {
-      // Rollback on error
       if (context?.previousNotes) {
         utils.notes.list.setData(undefined, context.previousNotes);
       }
       toast.error("保存失败，请重试");
     },
     onSettled: () => {
-      // Always refetch after error or success
       utils.notes.list.invalidate();
     },
   });
@@ -173,7 +179,6 @@ export default function Home() {
   // Filter notes
   const filteredNotes = useMemo(() => {
     let result = notes;
-
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       result = result.filter(
@@ -182,15 +187,12 @@ export default function Home() {
           (note.content?.toLowerCase().includes(query) ?? false)
       );
     }
-
     if (filterColor !== "all") {
       result = result.filter((note: Note) => note.color === filterColor);
     }
-
     if (filterTag) {
       result = result.filter((note: Note) => note.tags?.includes(filterTag));
     }
-
     return result;
   }, [notes, searchQuery, filterColor, filterTag]);
 
@@ -233,8 +235,8 @@ export default function Home() {
 
   const handleUpdateNote = (id: number, updates: Partial<Note>) => {
     const { userId, createdAt, updatedAt, isDeleted, sortOrder, ...validUpdates } = updates as any;
-    updateNoteMutation.mutate({ 
-      id, 
+    updateNoteMutation.mutate({
+      id,
       ...validUpdates,
       content: validUpdates.content ?? undefined,
     });
@@ -252,18 +254,342 @@ export default function Home() {
     permanentDeleteMutation.mutate({ id });
   };
 
-  // Toggle note completion (move to/from "eliminate" quadrant)
   const handleToggleComplete = (note: Note) => {
     const isCurrentlyCompleted = !note.isImportant && !note.isUrgent;
     if (isCurrentlyCompleted) {
-      // Move back to "do-first" (important and urgent)
       handleUpdateNote(note.id, { isImportant: true, isUrgent: true });
     } else {
-      // Move to "eliminate" (not important, not urgent)
       handleUpdateNote(note.id, { isImportant: false, isUrgent: false });
     }
   };
 
+  // Check if any filter is active
+  const hasActiveFilters = filterColor !== "all" || filterTag !== null;
+
+  // ============ Shared Filter Content ============
+  const filterContent = (
+    <>
+      {/* View Mode */}
+      <div className="mb-6">
+        <h3 className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">
+          视图模式
+        </h3>
+        <div className="flex rounded-lg overflow-hidden border border-border">
+          <Button
+            variant={viewMode === "list" ? "default" : "ghost"}
+            size="sm"
+            className="flex-1 gap-1 rounded-none border-0"
+            onClick={() => setViewMode("list")}
+          >
+            <List className="h-4 w-4" />
+            列表
+          </Button>
+          <Button
+            variant={viewMode === "quadrant" ? "default" : "ghost"}
+            size="sm"
+            className="flex-1 gap-1 rounded-none border-0"
+            onClick={() => setViewMode("quadrant")}
+          >
+            <Grid3X3 className="h-4 w-4" />
+            四象限
+          </Button>
+        </div>
+      </div>
+
+      {/* Color Filter */}
+      <div className="mb-6">
+        <h3 className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">
+          颜色筛选
+        </h3>
+        <div className="grid grid-cols-5 gap-3 max-w-[200px]">
+          <button
+            onClick={() => setFilterColor("all")}
+            className={cn(
+              "w-8 h-8 rounded-full transition-all hover:scale-110",
+              "bg-gradient-to-br from-note-yellow via-note-pink to-note-blue",
+              filterColor === "all"
+                ? "shadow-[0_0_0_3px_white,0_0_0_5px_hsl(var(--primary))]"
+                : ""
+            )}
+            title="全部颜色"
+          />
+          {noteColors.map((c) => (
+            <button
+              key={c.value}
+              onClick={() => setFilterColor(c.value)}
+              className={cn(
+                "w-8 h-8 rounded-full transition-all hover:scale-110",
+                c.class,
+                filterColor === c.value
+                  ? "shadow-[0_0_0_3px_white,0_0_0_5px_hsl(var(--primary))]"
+                  : ""
+              )}
+              title={c.label}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Tags */}
+      {allTags.length > 0 && (
+        <div className="mb-6">
+          <h3 className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">
+            标签
+          </h3>
+          <TagTree
+            tags={allTags}
+            selectedTag={filterTag}
+            onSelectTag={setFilterTag}
+            onRenameTag={(oldTag, newTag) => renameTagMutation.mutate({ oldTag, newTag })}
+            onDeleteTag={(tag) => deleteTagMutation.mutate({ tag })}
+            onMoveTag={(tag, newParent) => moveTagMutation.mutate({ tag, newParent })}
+          />
+        </div>
+      )}
+    </>
+  );
+
+  // ============ Notes Content (shared between mobile and desktop) ============
+  const notesContent = (
+    <>
+      {notesLoading ? (
+        <div className="flex items-center justify-center h-full">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : showTrash ? (
+        <ScrollArea className="h-full p-4 md:p-6">
+          {trashedNotes.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
+              <Trash2 className="h-12 w-12 mb-4 opacity-50" />
+              <p>回收站为空</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              {trashedNotes.map((note: Note) => (
+                <NoteCard
+                  key={note.id}
+                  note={note as Note}
+                  onRestore={handleRestoreNote}
+                  onPermanentDelete={handlePermanentDelete}
+                />
+              ))}
+            </div>
+          )}
+        </ScrollArea>
+      ) : viewMode === "quadrant" ? (
+        <QuadrantView
+          notes={filteredNotes as Note[]}
+          selectedNoteId={selectedNoteId}
+          onNoteClick={(note) => setSelectedNoteId(note.id)}
+          onToggleComplete={handleToggleComplete}
+        />
+      ) : (
+        <ScrollArea className="h-full p-4 md:p-6">
+          {filteredNotes.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
+              <StickyNote className="h-12 w-12 mb-4 opacity-50" />
+              <p>暂无便签</p>
+              <Button
+                variant="outline"
+                className="mt-4"
+                onClick={handleCreateNote}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                创建第一个便签
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2 max-w-3xl">
+              {filteredNotes.map((note: Note) => (
+                <NoteCard
+                  key={note.id}
+                  note={note as Note}
+                  onClick={() => setSelectedNoteId(note.id)}
+                  isSelected={selectedNoteId === note.id}
+                />
+              ))}
+            </div>
+          )}
+        </ScrollArea>
+      )}
+    </>
+  );
+
+  // ============ MOBILE LAYOUT ============
+  if (isMobile) {
+    return (
+      <div className="flex flex-col h-full overflow-hidden">
+        {/* Mobile Header */}
+        <header className="flex items-center justify-between px-4 py-3 border-b border-border/50 bg-background/80 backdrop-blur-md sticky top-0 z-30">
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-semibold">
+              {showTrash ? "回收站" : filterTag ? `#${filterTag}` : "便签"}
+            </h2>
+            <Badge variant="outline" className="text-xs">
+              {showTrash ? trashedNotes.length : filteredNotes.length}
+            </Badge>
+          </div>
+
+          <div className="flex items-center gap-1">
+            {/* Search toggle */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9"
+              onClick={() => setShowMobileSearch(!showMobileSearch)}
+            >
+              <Search className="h-4 w-4" />
+            </Button>
+
+            {/* Filter button with Sheet */}
+            <Sheet open={showMobileFilters} onOpenChange={setShowMobileFilters}>
+              <SheetTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn("h-9 w-9 relative", hasActiveFilters && "text-primary")}
+                >
+                  <Filter className="h-4 w-4" />
+                  {hasActiveFilters && (
+                    <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full" />
+                  )}
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="bottom" className="h-[70vh] rounded-t-2xl">
+                <SheetHeader>
+                  <SheetTitle>筛选与设置</SheetTitle>
+                </SheetHeader>
+                <ScrollArea className="h-full mt-4 pb-8">
+                  {filterContent}
+
+                  {/* Trash toggle */}
+                  <div className="mt-4 pt-4 border-t border-border/50">
+                    <Button
+                      variant={showTrash ? "secondary" : "ghost"}
+                      className="w-full justify-start gap-2"
+                      onClick={() => {
+                        setShowTrash(!showTrash);
+                        setShowMobileFilters(false);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      {showTrash ? "返回便签" : "回收站"}
+                      {trashedNotes.length > 0 && !showTrash && (
+                        <Badge variant="secondary" className="ml-auto">
+                          {trashedNotes.length}
+                        </Badge>
+                      )}
+                    </Button>
+                    {showTrash && trashedNotes.length > 0 && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        className="w-full mt-2"
+                        onClick={() => emptyTrashMutation.mutate()}
+                        disabled={emptyTrashMutation.isPending}
+                      >
+                        清空回收站
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Changelog & User */}
+                  <div className="mt-4 pt-4 border-t border-border/50 space-y-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start gap-2 text-muted-foreground"
+                      onClick={() => {
+                        setShowChangelog(true);
+                        setShowMobileFilters(false);
+                      }}
+                    >
+                      <FileText className="h-4 w-4" />
+                      更新日志 v{APP_VERSION}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start gap-2 text-destructive"
+                      onClick={logout}
+                    >
+                      <LogOut className="h-4 w-4" />
+                      退出登录
+                    </Button>
+                  </div>
+                </ScrollArea>
+              </SheetContent>
+            </Sheet>
+
+            {/* Create note */}
+            <Button
+              size="icon"
+              className="h-9 w-9"
+              onClick={handleCreateNote}
+              disabled={createNoteMutation.isPending}
+            >
+              {createNoteMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+        </header>
+
+        {/* Mobile Search Bar (collapsible) */}
+        {showMobileSearch && (
+          <div className="px-4 py-2 border-b border-border/50 bg-background/80 backdrop-blur-md">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="搜索便签..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 pr-9"
+                autoFocus
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2"
+                >
+                  <X className="h-4 w-4 text-muted-foreground" />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Mobile Content */}
+        <div className="flex-1 overflow-hidden">
+          {notesContent}
+        </div>
+
+        {/* Mobile Editor - Full Screen Overlay */}
+        {selectedNote && !showTrash && (
+          <div className="fixed inset-0 z-50 bg-background" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+            <NoteEditor
+              note={selectedNote as Note}
+              onClose={closeEditor}
+              onUpdate={handleUpdateNote}
+              onDelete={handleDeleteNote}
+              allTags={allTags}
+              onTagClick={(tag) => {
+                setFilterTag(tag);
+                closeEditor();
+              }}
+            />
+          </div>
+        )}
+
+        {/* Changelog Dialog */}
+        <NotesChangelogDialog open={showChangelog} onOpenChange={setShowChangelog} />
+      </div>
+    );
+  }
+
+  // ============ DESKTOP LAYOUT ============
   return (
     <div className="flex h-full overflow-hidden">
       {/* Sidebar for filters */}
@@ -286,83 +612,7 @@ export default function Home() {
 
         {/* Filters */}
         <ScrollArea className="flex-1 px-4">
-          {/* View Mode */}
-          <div className="mb-6">
-            <h3 className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">
-              视图模式
-            </h3>
-            <div className="flex rounded-lg overflow-hidden border border-border">
-              <Button
-                variant={viewMode === "list" ? "default" : "ghost"}
-                size="sm"
-                className="flex-1 gap-1 rounded-none border-0"
-                onClick={() => setViewMode("list")}
-              >
-                <List className="h-4 w-4" />
-                列表
-              </Button>
-              <Button
-                variant={viewMode === "quadrant" ? "default" : "ghost"}
-                size="sm"
-                className="flex-1 gap-1 rounded-none border-0"
-                onClick={() => setViewMode("quadrant")}
-              >
-                <Grid3X3 className="h-4 w-4" />
-                四象限
-              </Button>
-            </div>
-          </div>
-
-          {/* Color Filter */}
-          <div className="mb-6">
-            <h3 className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">
-              颜色筛选
-            </h3>
-            <div className="grid grid-cols-5 gap-3 max-w-[200px]">
-              <button
-                onClick={() => setFilterColor("all")}
-                className={cn(
-                  "w-8 h-8 rounded-full transition-all hover:scale-110",
-                  "bg-gradient-to-br from-note-yellow via-note-pink to-note-blue",
-                  filterColor === "all"
-                    ? "shadow-[0_0_0_3px_white,0_0_0_5px_hsl(var(--primary))]"
-                    : ""
-                )}
-                title="全部颜色"
-              />
-              {noteColors.map((c) => (
-                <button
-                  key={c.value}
-                  onClick={() => setFilterColor(c.value)}
-                  className={cn(
-                    "w-8 h-8 rounded-full transition-all hover:scale-110",
-                    c.class,
-                    filterColor === c.value
-                      ? "shadow-[0_0_0_3px_white,0_0_0_5px_hsl(var(--primary))]"
-                      : ""
-                  )}
-                  title={c.label}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Tags */}
-          {allTags.length > 0 && (
-            <div className="mb-6">
-              <h3 className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">
-                标签
-              </h3>
-              <TagTree
-                tags={allTags}
-                selectedTag={filterTag}
-                onSelectTag={setFilterTag}
-                onRenameTag={(oldTag, newTag) => renameTagMutation.mutate({ oldTag, newTag })}
-                onDeleteTag={(tag) => deleteTagMutation.mutate({ tag })}
-                onMoveTag={(tag, newParent) => moveTagMutation.mutate({ tag, newParent })}
-              />
-            </div>
-          )}
+          {filterContent}
         </ScrollArea>
 
         {/* Trash */}
@@ -447,7 +697,7 @@ export default function Home() {
               {showTrash ? trashedNotes.length : filteredNotes.length} 条
             </Badge>
           </div>
-          
+
           <div className="flex items-center gap-2">
             <div className="relative w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -465,76 +715,13 @@ export default function Home() {
         <div className="flex-1 flex overflow-hidden">
           {/* Notes List/Grid */}
           <div className={cn("flex-1 overflow-hidden", selectedNote && "hidden lg:block lg:w-1/2")}>
-            {notesLoading ? (
-              <div className="flex items-center justify-center h-full">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
-            ) : showTrash ? (
-              // Trash View
-              <ScrollArea className="h-full p-6">
-                {trashedNotes.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-                    <Trash2 className="h-12 w-12 mb-4 opacity-50" />
-                    <p>回收站为空</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {trashedNotes.map((note: Note) => (
-                      <NoteCard
-                        key={note.id}
-                        note={note as Note}
-                        onRestore={handleRestoreNote}
-                        onPermanentDelete={handlePermanentDelete}
-                      />
-                    ))}
-                  </div>
-                )}
-              </ScrollArea>
-            ) : viewMode === "quadrant" ? (
-              // Quadrant View
-              <QuadrantView
-                notes={filteredNotes as Note[]}
-                selectedNoteId={selectedNoteId}
-                onNoteClick={(note) => setSelectedNoteId(note.id)}
-                onToggleComplete={handleToggleComplete}
-              />
-            ) : (
-              // List View
-              <ScrollArea className="h-full p-6">
-                {filteredNotes.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-                    <StickyNote className="h-12 w-12 mb-4 opacity-50" />
-                    <p>暂无便签</p>
-                    <Button
-                      variant="outline"
-                      className="mt-4"
-                      onClick={handleCreateNote}
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      创建第一个便签
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-2 max-w-3xl">
-                    {filteredNotes.map((note: Note) => (
-                      <NoteCard
-                        key={note.id}
-                        note={note as Note}
-                        onClick={() => setSelectedNoteId(note.id)}
-                        isSelected={selectedNoteId === note.id}
-                      />
-                    ))}
-                  </div>
-                )}
-              </ScrollArea>
-            )}
+            {notesContent}
           </div>
 
           {/* Editor Panel with Overlay */}
           {selectedNote && !showTrash && (
             <>
-              {/* Overlay to close editor when clicking outside - visible on all screens */}
-              <div 
+              <div
                 className="fixed inset-0 bg-black/10 lg:bg-transparent z-40 lg:absolute lg:inset-auto lg:left-0 lg:top-0 lg:right-1/2 lg:bottom-0"
                 onClick={closeEditor}
               />

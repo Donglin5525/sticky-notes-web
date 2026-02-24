@@ -38,7 +38,15 @@ import {
   Move,
   Keyboard,
   FileText,
+  MoreHorizontal,
 } from "lucide-react";
+import { useIsMobile } from "@/hooks/useMobile";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { Streamdown } from "streamdown";
@@ -246,7 +254,7 @@ function DraggableTaskItem({
         )}
       </div>
 
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="flex items-center gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
         <Button
           variant="ghost"
           size="icon"
@@ -297,10 +305,12 @@ function DroppableQuadrant({
 
 export default function DailyTodo() {
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const utils = trpc.useUtils();
   
   // State
   const [selectedDate, setSelectedDate] = useState(getTodayDate());
+  const [mobileActiveQuadrant, setMobileActiveQuadrant] = useState<TaskQuadrant>("priority");
   const [showAddTaskDialog, setShowAddTaskDialog] = useState(false);
   const [showPromptDialog, setShowPromptDialog] = useState(false);
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
@@ -783,6 +793,14 @@ export default function DailyTodo() {
   
   const isToday = selectedDate === getTodayDate();
   
+  // Quadrant tab labels for mobile
+  const quadrantTabs: { key: TaskQuadrant; label: string; dotColor: string }[] = [
+    { key: "priority", label: "优先", dotColor: "bg-red-500" },
+    { key: "strategic", label: "战略", dotColor: "bg-blue-500" },
+    { key: "trivial", label: "琐碎", dotColor: "bg-amber-500" },
+    { key: "trap", label: "陷阱", dotColor: "bg-gray-400" },
+  ];
+
   return (
     <DndContext
       sensors={sensors}
@@ -792,128 +810,191 @@ export default function DailyTodo() {
     >
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         {/* Header */}
-        <header className="p-4 border-b border-border/50 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" onClick={handlePrevDay}>
+        <header className="p-3 md:p-4 border-b border-border/50">
+          {/* Date Navigation Row */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1 md:gap-2">
+              <Button variant="ghost" size="icon" className="h-8 w-8 md:h-9 md:w-9" onClick={handlePrevDay}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <div className="text-center min-w-[200px]">
-                <h2 className="font-semibold">{formatDisplayDate(selectedDate)}</h2>
+              <div className="text-center min-w-[140px] md:min-w-[200px]">
+                <h2 className="text-sm md:text-base font-semibold">{formatDisplayDate(selectedDate)}</h2>
                 {!isToday && (
                   <Button variant="link" size="sm" className="text-xs p-0 h-auto" onClick={handleToday}>
                     返回今天
                   </Button>
                 )}
               </div>
-              <Button variant="ghost" size="icon" onClick={handleNextDay}>
+              <Button variant="ghost" size="icon" className="h-8 w-8 md:h-9 md:w-9" onClick={handleNextDay}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
-            
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                已完成 {taskStats.completed}
-              </span>
-              <span className="text-border">|</span>
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-amber-500" />
-                进行中 {taskStats.total - taskStats.completed}
-              </span>
+
+            {/* Stats + Actions */}
+            <div className="flex items-center gap-2">
+              <div className="hidden md:flex items-center gap-2 text-sm text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  已完成 {taskStats.completed}
+                </span>
+                <span className="text-border">|</span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-amber-500" />
+                  进行中 {taskStats.total - taskStats.completed}
+                </span>
+              </div>
+
+              {/* Mobile: compact stats */}
+              <div className="flex md:hidden items-center gap-1 text-xs text-muted-foreground">
+                <span className="text-emerald-600 font-medium">{taskStats.completed}</span>
+                <span>/</span>
+                <span>{taskStats.total}</span>
+              </div>
+
+              {/* Desktop toolbar */}
+              <div className="hidden md:flex items-center gap-2">
+                {isSelectionMode ? (
+                  <>
+                    <Button variant="outline" size="sm" onClick={handleSelectAll}>
+                      <CheckSquare className="h-4 w-4 mr-2" />
+                      {selectedTaskIds.size === localTasks.length ? "取消全选" : "全选"}
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={handleBatchMove} disabled={selectedTaskIds.size === 0}>
+                      <Move className="h-4 w-4 mr-2" />
+                      移动 ({selectedTaskIds.size})
+                    </Button>
+                    <Button variant="destructive" size="sm" onClick={handleBatchDelete} disabled={selectedTaskIds.size === 0}>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      删除 ({selectedTaskIds.size})
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={exitSelectionMode}>
+                      <X className="h-4 w-4 mr-2" />
+                      取消
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button variant="outline" size="sm" onClick={() => setIsSelectionMode(true)}>
+                      <CheckSquare className="h-4 w-4 mr-2" />
+                      批量操作
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setShowShortcutsDialog(true)}>
+                      <Keyboard className="h-4 w-4 mr-2" />
+                      快捷键
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setShowHistoryDialog(true)}>
+                      <History className="h-4 w-4 mr-2" />
+                      历史记录
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setShowPromptDialog(true)}>
+                      <Settings className="h-4 w-4 mr-2" />
+                      Prompt 管理
+                    </Button>
+                  </>
+                )}
+              </div>
+
+              {/* Mobile: More menu */}
+              <div className="flex md:hidden">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setIsSelectionMode(true)}>
+                      <CheckSquare className="h-4 w-4 mr-2" />
+                      批量操作
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setShowBatchAddDialog(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      批量新增
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setShowHistoryDialog(true)}>
+                      <History className="h-4 w-4 mr-2" />
+                      历史记录
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setShowPromptDialog(true)}>
+                      <Settings className="h-4 w-4 mr-2" />
+                      Prompt 管理
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setShowChangelogDialog(true)}>
+                      <FileText className="h-4 w-4 mr-2" />
+                      更新日志
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
           </div>
-          
-          <div className="flex items-center gap-2">
-            {/* Batch Operations */}
-            {isSelectionMode ? (
-              <>
-                <Button variant="outline" size="sm" onClick={handleSelectAll}>
-                  <CheckSquare className="h-4 w-4 mr-2" />
-                  {selectedTaskIds.size === localTasks.length ? "取消全选" : "全选"}
-                </Button>
-                <Button variant="outline" size="sm" onClick={handleBatchMove} disabled={selectedTaskIds.size === 0}>
-                  <Move className="h-4 w-4 mr-2" />
-                  移动 ({selectedTaskIds.size})
-                </Button>
-                <Button variant="destructive" size="sm" onClick={handleBatchDelete} disabled={selectedTaskIds.size === 0}>
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  删除 ({selectedTaskIds.size})
-                </Button>
-                <Button variant="ghost" size="sm" onClick={exitSelectionMode}>
-                  <X className="h-4 w-4 mr-2" />
-                  取消
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button variant="outline" size="sm" onClick={() => setIsSelectionMode(true)}>
-                  <CheckSquare className="h-4 w-4 mr-2" />
-                  批量操作
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => setShowShortcutsDialog(true)}>
-                  <Keyboard className="h-4 w-4 mr-2" />
-                  快捷键
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => setShowHistoryDialog(true)}>
-                  <History className="h-4 w-4 mr-2" />
-                  历史记录
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => setShowPromptDialog(true)}>
-                  <Settings className="h-4 w-4 mr-2" />
-                  Prompt 管理
-                </Button>
-              </>
-            )}
-          </div>
+
+          {/* Mobile: Batch selection bar */}
+          {isMobile && isSelectionMode && (
+            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border/50">
+              <Button variant="outline" size="sm" className="text-xs" onClick={handleSelectAll}>
+                {selectedTaskIds.size === localTasks.length ? "取消全选" : "全选"}
+              </Button>
+              <Button variant="outline" size="sm" className="text-xs" onClick={handleBatchMove} disabled={selectedTaskIds.size === 0}>
+                <Move className="h-3 w-3 mr-1" />
+                移动({selectedTaskIds.size})
+              </Button>
+              <Button variant="destructive" size="sm" className="text-xs" onClick={handleBatchDelete} disabled={selectedTaskIds.size === 0}>
+                <Trash2 className="h-3 w-3 mr-1" />
+                删除({selectedTaskIds.size})
+              </Button>
+              <Button variant="ghost" size="sm" className="text-xs ml-auto" onClick={exitSelectionMode}>
+                取消
+              </Button>
+            </div>
+          )}
         </header>
         
         {/* Main Content */}
         <div className="flex-1 overflow-y-auto">
-          <div className="p-6 space-y-6">
-            {/* Four Quadrants with Drag & Drop */}
-            <div className="grid grid-cols-2 gap-4">
-              {(Object.keys(quadrantConfig) as TaskQuadrant[]).map((quadrant) => (
+          <div className="p-3 md:p-6 space-y-4 md:space-y-6">
+
+            {/* ===== MOBILE: Tab-based single quadrant view ===== */}
+            {isMobile ? (
+              <>
+                {/* Quadrant Tabs */}
+                <div className="flex rounded-lg border border-border overflow-hidden">
+                  {quadrantTabs.map((tab) => (
+                    <button
+                      key={tab.key}
+                      className={cn(
+                        "flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors",
+                        mobileActiveQuadrant === tab.key
+                          ? quadrantConfig[tab.key].bgColor + " " + quadrantConfig[tab.key].color
+                          : "bg-background text-muted-foreground hover:bg-muted/50"
+                      )}
+                      onClick={() => setMobileActiveQuadrant(tab.key)}
+                    >
+                      <span className={cn("w-2 h-2 rounded-full", tab.dotColor)} />
+                      {tab.label}
+                      <span className="text-[10px] opacity-70">
+                        {tasksByQuadrant[tab.key].length}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Active Quadrant Content */}
                 <DroppableQuadrant
-                  key={quadrant}
-                  quadrant={quadrant}
+                  quadrant={mobileActiveQuadrant}
                   className={cn(
-                    "rounded-xl p-4 border min-h-[200px] transition-all",
-                    quadrantConfig[quadrant].bgColor
+                    "rounded-xl p-3 border min-h-[150px] transition-all",
+                    quadrantConfig[mobileActiveQuadrant].bgColor
                   )}
                 >
-                  <div className="mb-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className={cn("w-3 h-3 rounded-full", {
-                          "bg-red-500": quadrant === "priority",
-                          "bg-blue-500": quadrant === "strategic",
-                          "bg-amber-500": quadrant === "trivial",
-                          "bg-gray-400": quadrant === "trap",
-                        })} />
-                        <h3 className={cn("font-semibold", quadrantConfig[quadrant].color)}>
-                          {quadrantConfig[quadrant].name}
-                        </h3>
-                        <span className="text-xs text-muted-foreground">
-                          {quadrantConfig[quadrant].description}
-                        </span>
-                      </div>
-                      <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", {
-                        "bg-red-100 text-red-600": quadrant === "priority",
-                        "bg-blue-100 text-blue-600": quadrant === "strategic",
-                        "bg-amber-100 text-amber-600": quadrant === "trivial",
-                        "bg-gray-100 text-gray-600": quadrant === "trap",
-                      })}>
-                        {tasksByQuadrant[quadrant].length} 项
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1 ml-5">
-                      {quadrantConfig[quadrant].subtitle}
+                  <div className="mb-2">
+                    <p className="text-xs text-muted-foreground">
+                      {quadrantConfig[mobileActiveQuadrant].subtitle}
                     </p>
                   </div>
-                  
-                  <div className="space-y-2 min-h-[60px]">
-                    {tasksByQuadrant[quadrant].map((task: Task) => (
+
+                  <div className="space-y-2">
+                    {tasksByQuadrant[mobileActiveQuadrant].map((task: Task) => (
                       <DraggableTaskItem
                         key={task.id}
                         task={task}
@@ -926,12 +1007,12 @@ export default function DailyTodo() {
                       />
                     ))}
                   </div>
-                  
+
                   <Button
                     variant="ghost"
                     className="w-full mt-3 text-muted-foreground hover:text-foreground"
                     onClick={() => {
-                      setNewTaskQuadrant(quadrant);
+                      setNewTaskQuadrant(mobileActiveQuadrant);
                       setShowAddTaskDialog(true);
                     }}
                   >
@@ -939,66 +1020,139 @@ export default function DailyTodo() {
                     添加任务
                   </Button>
                 </DroppableQuadrant>
-              ))}
-            </div>
-            
-            {/* Batch Add Button */}
-            <div className="flex justify-end mt-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowBatchAddDialog(true)}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                批量新增
-              </Button>
-            </div>
+              </>
+            ) : (
+              /* ===== DESKTOP: 2x2 Grid quadrant view ===== */
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  {(Object.keys(quadrantConfig) as TaskQuadrant[]).map((quadrant) => (
+                    <DroppableQuadrant
+                      key={quadrant}
+                      quadrant={quadrant}
+                      className={cn(
+                        "rounded-xl p-4 border min-h-[200px] transition-all",
+                        quadrantConfig[quadrant].bgColor
+                      )}
+                    >
+                      <div className="mb-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className={cn("w-3 h-3 rounded-full", {
+                              "bg-red-500": quadrant === "priority",
+                              "bg-blue-500": quadrant === "strategic",
+                              "bg-amber-500": quadrant === "trivial",
+                              "bg-gray-400": quadrant === "trap",
+                            })} />
+                            <h3 className={cn("font-semibold", quadrantConfig[quadrant].color)}>
+                              {quadrantConfig[quadrant].name}
+                            </h3>
+                            <span className="text-xs text-muted-foreground">
+                              {quadrantConfig[quadrant].description}
+                            </span>
+                          </div>
+                          <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", {
+                            "bg-red-100 text-red-600": quadrant === "priority",
+                            "bg-blue-100 text-blue-600": quadrant === "strategic",
+                            "bg-amber-100 text-amber-600": quadrant === "trivial",
+                            "bg-gray-100 text-gray-600": quadrant === "trap",
+                          })}>
+                            {tasksByQuadrant[quadrant].length} 项
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1 ml-5">
+                          {quadrantConfig[quadrant].subtitle}
+                        </p>
+                      </div>
+
+                      <div className="space-y-2 min-h-[60px]">
+                        {tasksByQuadrant[quadrant].map((task: Task) => (
+                          <DraggableTaskItem
+                            key={task.id}
+                            task={task}
+                            isSelected={selectedTaskIds.has(task.id)}
+                            isSelectionMode={isSelectionMode}
+                            onToggleComplete={handleToggleComplete}
+                            onEdit={setEditingTask}
+                            onDelete={handleDeleteTask}
+                            onSelect={handleToggleSelection}
+                          />
+                        ))}
+                      </div>
+
+                      <Button
+                        variant="ghost"
+                        className="w-full mt-3 text-muted-foreground hover:text-foreground"
+                        onClick={() => {
+                          setNewTaskQuadrant(quadrant);
+                          setShowAddTaskDialog(true);
+                        }}
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        添加任务
+                      </Button>
+                    </DroppableQuadrant>
+                  ))}
+                </div>
+
+                {/* Batch Add Button - Desktop */}
+                <div className="flex justify-end mt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowBatchAddDialog(true)}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    批量新增
+                  </Button>
+                </div>
+              </>
+            )}
             
             {/* Daily Summary */}
-            <div className="bg-white rounded-xl p-5 border border-border/50 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
+            <div className="bg-white rounded-xl p-3 md:p-5 border border-border/50 shadow-sm">
+              <div className="flex items-center justify-between mb-3 md:mb-4">
                 <div className="flex items-center gap-2">
-                  <Pencil className="h-5 w-5 text-amber-500" />
-                  <h3 className="font-semibold">今日总结</h3>
+                  <Pencil className="h-4 w-4 md:h-5 md:w-5 text-amber-500" />
+                  <h3 className="text-sm md:text-base font-semibold">今日总结</h3>
                 </div>
                 <Button
                   variant="default"
                   size="sm"
                   onClick={handleAnalyze}
                   disabled={analyzeMutation.isPending}
-                  className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600"
+                  className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-xs md:text-sm"
                 >
                   {analyzeMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    <Loader2 className="h-4 w-4 mr-1 md:mr-2 animate-spin" />
                   ) : (
-                    <Sparkles className="h-4 w-4 mr-2" />
+                    <Sparkles className="h-4 w-4 mr-1 md:mr-2" />
                   )}
                   智能分析
                 </Button>
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
                 {/* 今日收获与反思 */}
-                <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="text-lg">🎯</span>
-                    <h4 className="font-medium text-emerald-700">今日收获与反思</h4>
+                <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-3 md:p-4">
+                  <div className="flex items-center gap-2 mb-2 md:mb-3">
+                    <span className="text-base md:text-lg">🎯</span>
+                    <h4 className="text-sm md:text-base font-medium text-emerald-700">今日收获与反思</h4>
                   </div>
                   <Textarea
                     value={reflection}
                     onChange={(e) => setReflection(e.target.value)}
                     placeholder="记录今天的成就、收获和反思..."
-                    className="min-h-[120px] bg-white/70 border-0 focus-visible:ring-emerald-300 resize-none"
+                    className="min-h-[80px] md:min-h-[120px] bg-white/70 border-0 focus-visible:ring-emerald-300 resize-none text-sm"
                   />
                 </div>
                 
                 {/* 明日计划 */}
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 flex flex-col">
-                  <div className="flex items-center justify-between mb-3">
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-3 md:p-4 flex flex-col">
+                  <div className="flex items-center justify-between mb-2 md:mb-3">
                     <div className="flex items-center gap-2">
-                      <span className="text-lg">📋</span>
-                      <h4 className="font-medium text-blue-700">明日计划</h4>
+                      <span className="text-base md:text-lg">📋</span>
+                      <h4 className="text-sm md:text-base font-medium text-blue-700">明日计划</h4>
                     </div>
                     <Button
                       variant="outline"
@@ -1019,11 +1173,10 @@ export default function DailyTodo() {
                     value={tomorrowPlan}
                     onChange={(e) => setTomorrowPlan(e.target.value)}
                     placeholder="每行一个任务，AI 会自动分配到四象限..."
-                    className="flex-1 min-h-[120px] bg-white/70 border-0 focus-visible:ring-blue-300 resize-none"
+                    className="flex-1 min-h-[80px] md:min-h-[120px] bg-white/70 border-0 focus-visible:ring-blue-300 resize-none text-sm"
                   />
-                  {/* 保存总结按钮 - 放在明日计划区域右下角 */}
-                  <div className="flex justify-end mt-3">
-                    <Button onClick={handleSaveSummary} disabled={upsertSummaryMutation.isPending}>
+                  <div className="flex justify-end mt-2 md:mt-3">
+                    <Button size="sm" onClick={handleSaveSummary} disabled={upsertSummaryMutation.isPending}>
                       {upsertSummaryMutation.isPending && (
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                       )}
@@ -1034,10 +1187,10 @@ export default function DailyTodo() {
               </div>
               
               {summary?.aiAnalysis && (
-                <div className="mt-4 p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl">
-                  <div className="flex items-center gap-2 mb-3">
+                <div className="mt-3 md:mt-4 p-3 md:p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl">
+                  <div className="flex items-center gap-2 mb-2 md:mb-3">
                     <Sparkles className="h-4 w-4 text-purple-500" />
-                    <h4 className="font-medium text-purple-700">AI 分析结果</h4>
+                    <h4 className="text-sm md:text-base font-medium text-purple-700">AI 分析结果</h4>
                   </div>
                   <div className="prose prose-sm max-w-none text-gray-700">
                     <Streamdown>{summary.aiAnalysis}</Streamdown>
@@ -1046,8 +1199,8 @@ export default function DailyTodo() {
               )}
             </div>
             
-            {/* Changelog Button */}
-            <div className="flex justify-center pb-4">
+            {/* Changelog Button - Desktop only */}
+            <div className="hidden md:flex justify-center pb-4">
               <Button
                 variant="ghost"
                 size="sm"

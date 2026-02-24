@@ -227,12 +227,12 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete, allTags = [], on
   const timeAgo = formatRelativeTime(note.updatedAt);
 
   return (
-    <div className="flex flex-col h-full w-full bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-200">
+    <div className="flex flex-col h-full w-full bg-white md:rounded-2xl shadow-xl overflow-hidden md:border border-gray-200">
       {/* 顶部颜色装饰条 */}
-      <div className={cn("h-2 w-full", colorBarMap[note.color])} />
+      <div className={cn("h-1.5 md:h-2 w-full", colorBarMap[note.color])} />
       
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50/50">
+      <div className="flex items-center justify-between px-3 md:px-4 py-2 md:py-3 border-b border-gray-100 bg-gray-50/50">
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 text-xs text-gray-500">
             <Clock className="h-3 w-3" />
@@ -331,14 +331,14 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete, allTags = [], on
 
       {/* Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="px-4 pt-4 pb-2">
+        <div className="px-3 md:px-4 pt-3 md:pt-4 pb-2">
           {/* Title */}
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="标题"
-            className="w-full bg-transparent border-none text-xl font-bold placeholder:text-gray-300 focus:outline-none mb-3 text-gray-800"
+            className="w-full bg-transparent border-none text-lg md:text-xl font-bold placeholder:text-gray-300 focus:outline-none mb-3 text-gray-800"
           />
 
           {/* Priority Toggles */}
@@ -373,7 +373,7 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete, allTags = [], on
         </div>
 
         {/* WYSIWYG Editor */}
-        <div className="flex-1 overflow-auto px-4 pb-2">
+        <div className="flex-1 overflow-auto px-3 md:px-4 pb-2">
           <div className="border border-gray-200 rounded-lg overflow-hidden bg-white min-h-[200px]">
             <WysiwygEditor
               ref={editorRef}
@@ -389,7 +389,7 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete, allTags = [], on
         </div>
 
         {/* Tags Section */}
-        <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-t border-gray-100 bg-gray-50/30">
+        <div className="flex flex-wrap items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 md:py-3 border-t border-gray-100 bg-gray-50/30">
           {/* Tag Selector Button */}
           <Popover open={tagSelectorOpen} onOpenChange={setTagSelectorOpen}>
             <PopoverTrigger asChild>
