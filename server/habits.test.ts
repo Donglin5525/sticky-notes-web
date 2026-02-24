@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeAll } from "vitest";
+import { describe, expect, it, afterAll } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
@@ -48,6 +48,27 @@ function createUnauthContext(): { ctx: TrpcContext } {
 
 describe("habits", () => {
   let createdHabitId: number;
+  // Track ALL habit IDs created during tests for cleanup
+  const allCreatedHabitIds: number[] = [];
+
+  // Clean up ALL test-created habits after all tests finish
+  afterAll(async () => {
+    const { ctx } = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+
+    for (const id of allCreatedHabitIds) {
+      try {
+        // First try to restore (in case it's archived/deleted)
+        try { await caller.habits.restore({ id }); } catch { /* ignore */ }
+        // Then soft delete
+        try { await caller.habits.delete({ id }); } catch { /* ignore */ }
+        // Then permanently delete
+        try { await caller.habits.permanentDelete({ id }); } catch { /* ignore */ }
+      } catch {
+        // Ignore cleanup errors - habit may already be deleted
+      }
+    }
+  });
 
   describe("habits.create", () => {
     it("should create a count-type habit with default unit", async () => {
@@ -64,6 +85,7 @@ describe("habits", () => {
       expect(typeof result.id).toBe("number");
       expect(result.unit).toBe("次");
       createdHabitId = result.id;
+      allCreatedHabitIds.push(result.id);
     });
 
     it("should create a value-type habit with custom unit", async () => {
@@ -79,6 +101,7 @@ describe("habits", () => {
       expect(result).toBeDefined();
       expect(result.id).toBeDefined();
       expect(result.unit).toBe("KG");
+      allCreatedHabitIds.push(result.id);
     });
 
     it("should reject unauthenticated requests", async () => {
