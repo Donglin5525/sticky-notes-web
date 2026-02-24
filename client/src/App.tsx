@@ -4,15 +4,20 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch, useLocation } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { NotesFilterProvider, useNotesFilter } from "./contexts/NotesFilterContext";
 import Home from "./pages/Home";
 import DailyTodo from "./pages/DailyTodo";
 import HabitTracker from "./pages/HabitTracker";
 import { useAuth } from "./_core/hooks/useAuth";
 import { useIsMobile } from "./hooks/useMobile";
 import { cn } from "./lib/utils";
-import { StickyNote, CheckSquare, Loader2, Target } from "lucide-react";
+import { StickyNote, CheckSquare, Loader2, Target, Tag, ChevronDown, ChevronRight } from "lucide-react";
 import { getLoginUrl } from "./const";
 import { Button } from "./components/ui/button";
+import { TagTree } from "./components/TagTree";
+import { ScrollArea } from "./components/ui/scroll-area";
+import { trpc } from "./lib/trpc";
+import { useState, useEffect } from "react";
 
 // Mobile Bottom Tab Navigation
 function MobileTabBar() {
@@ -53,13 +58,30 @@ function MobileTabBar() {
   );
 }
 
-// Desktop Sidebar Navigation
+// Desktop Sidebar Navigation with Tag Tree
 function DesktopSidebar() {
   const [location, setLocation] = useLocation();
+  const { filterTag, setFilterTag, allTags } = useNotesFilter();
+  const [tagTreeExpanded, setTagTreeExpanded] = useState(true);
 
   const isNotesTab = location === "/" || location === "/notes";
   const isTodoTab = location === "/todo";
   const isHabitTab = location === "/habits";
+
+  // Tag management mutations
+  const utils = trpc.useUtils();
+  const renameTagMutation = trpc.tags.rename.useMutation({
+    onSuccess: () => utils.notes.list.invalidate(),
+  });
+  const deleteTagMutation = trpc.tags.delete.useMutation({
+    onSuccess: () => {
+      utils.notes.list.invalidate();
+      setFilterTag(null);
+    },
+  });
+  const moveTagMutation = trpc.tags.move.useMutation({
+    onSuccess: () => utils.notes.list.invalidate(),
+  });
 
   return (
     <aside className="w-64 border-r border-border/50 bg-sidebar/50 backdrop-blur-xl flex flex-col">
@@ -135,8 +157,55 @@ function DesktopSidebar() {
         </div>
       </div>
 
-      {/* Spacer */}
-      <div className="flex-1" />
+      {/* Tag Tree Section - visible when on notes page and has tags */}
+      {allTags.length > 0 && (
+        <div className="flex flex-col flex-1 overflow-hidden border-t border-border/50">
+          {/* Tag Tree Header */}
+          <button
+            onClick={() => setTagTreeExpanded(!tagTreeExpanded)}
+            className="flex items-center gap-2 px-4 py-3 text-left hover:bg-muted/50 transition-colors"
+          >
+            {tagTreeExpanded ? (
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            )}
+            <Tag className="h-4 w-4 text-muted-foreground" />
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              标签
+            </span>
+            {filterTag && (
+              <span className="ml-auto text-xs text-primary font-medium truncate max-w-[80px]">
+                {filterTag}
+              </span>
+            )}
+          </button>
+
+          {/* Tag Tree Content */}
+          {tagTreeExpanded && (
+            <ScrollArea className="flex-1 px-3 pb-3">
+              <TagTree
+                tags={allTags}
+                selectedTag={filterTag}
+                onSelectTag={(tag) => {
+                  setFilterTag(tag);
+                  // If not on notes page, navigate to it
+                  if (location !== "/" && location !== "/notes") {
+                    // Use window to trigger navigation
+                    window.dispatchEvent(new CustomEvent("navigate-to-notes"));
+                  }
+                }}
+                onRenameTag={(oldTag, newTag) => renameTagMutation.mutate({ oldTag, newTag })}
+                onDeleteTag={(tag) => deleteTagMutation.mutate({ tag })}
+                onMoveTag={(tag, newParent) => moveTagMutation.mutate({ tag, newParent })}
+              />
+            </ScrollArea>
+          )}
+        </div>
+      )}
+
+      {/* Spacer when no tags */}
+      {allTags.length === 0 && <div className="flex-1" />}
     </aside>
   );
 }
@@ -145,6 +214,14 @@ function DesktopSidebar() {
 function MainLayout() {
   const { user, loading: authLoading } = useAuth();
   const isMobile = useIsMobile();
+  const [, setLocation] = useLocation();
+
+  // Listen for navigate-to-notes event from sidebar tag click
+  useEffect(() => {
+    const handler = () => setLocation("/");
+    window.addEventListener("navigate-to-notes", handler);
+    return () => window.removeEventListener("navigate-to-notes", handler);
+  }, [setLocation]);
 
   // Auth loading state
   if (authLoading) {
@@ -229,7 +306,9 @@ function App() {
       >
         <TooltipProvider>
           <Toaster />
-          <MainLayout />
+          <NotesFilterProvider>
+            <MainLayout />
+          </NotesFilterProvider>
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>
