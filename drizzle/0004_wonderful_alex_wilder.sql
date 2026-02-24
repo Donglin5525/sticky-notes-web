@@ -1,0 +1,1 @@
+ALTER TABLE `habits` ADD `unit` varchar(20) DEFAULT '' NOT NULL;
