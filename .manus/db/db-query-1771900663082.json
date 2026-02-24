@@ -1,0 +1,50 @@
+{
+  "query": "SELECT id, name, type, unit, isDeleted, isArchived FROM habits WHERE name LIKE '测试%' OR name LIKE '更新后%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 48oCfdmt3v6Fzpq.root --database VMbwWLuaxi3PCyAKPmMCTi --execute SELECT id, name, type, unit, isDeleted, isArchived FROM habits WHERE name LIKE '测试%' OR name LIKE '更新后%';",
+  "rows": [
+    {
+      "id": "4",
+      "name": "测试体重",
+      "type": "value",
+      "unit": "",
+      "isDeleted": "0",
+      "isArchived": "0"
+    },
+    {
+      "id": "60002",
+      "name": "测试体重",
+      "type": "value",
+      "unit": "",
+      "isDeleted": "1",
+      "isArchived": "0"
+    },
+    {
+      "id": "60004",
+      "name": "测试体重",
+      "type": "value",
+      "unit": "",
+      "isDeleted": "1",
+      "isArchived": "0"
+    },
+    {
+      "id": "90002",
+      "name": "测试体重",
+      "type": "value",
+      "unit": "KG",
+      "isDeleted": "1",
+      "isArchived": "0"
+    },
+    {
+      "id": "90004",
+      "name": "测试体重",
+      "type": "value",
+      "unit": "KG",
+      "isDeleted": "1",
+      "isArchived": "0"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\ttype\tunit\tisDeleted\tisArchived\n4\t测试体重\tvalue\t\t0\t0\n60002\t测试体重\tvalue\t\t1\t0\n60004\t测试体重\tvalue\t\t1\t0\n90002\t测试体重\tvalue\tKG\t1\t0\n90004\t测试体重\tvalue\tKG\t1\t0\n",
+  "stderr": "",
+  "execution_time_ms": 2161
+}

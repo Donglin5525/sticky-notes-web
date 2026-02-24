@@ -1,0 +1,9 @@
+{
+  "query": "DELETE FROM habits WHERE name LIKE '测试%' OR name LIKE '更新后%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 48oCfdmt3v6Fzpq.root --database VMbwWLuaxi3PCyAKPmMCTi --execute DELETE FROM habits WHERE name LIKE '测试%' OR name LIKE '更新后%';",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1585
+}
