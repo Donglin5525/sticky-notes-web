@@ -180,6 +180,8 @@ export const habits = mysqlTable("habits", {
   isArchived: boolean("isArchived").default(false).notNull(),
   /** Soft delete flag */
   isDeleted: boolean("isDeleted").default(false).notNull(),
+  /** Unit label for the habit (e.g., KG, 次, ml, 杯) */
+  unit: varchar("unit", { length: 20 }).default("").notNull(),
   /** Created timestamp (Unix ms) */
   createdAt: bigint("createdAt", { mode: "number" }).notNull(),
 });

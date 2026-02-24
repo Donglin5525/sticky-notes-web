@@ -64,6 +64,7 @@ type HabitWithStats = {
   userId: number;
   name: string;
   type: "count" | "value";
+  unit: string;
   sortOrder: number;
   isArchived: boolean;
   isDeleted: boolean;
@@ -370,8 +371,8 @@ export default function HabitTracker() {
       <AddHabitDialog
         open={showAddDialog}
         onOpenChange={setShowAddDialog}
-        onSubmit={(name, type) => {
-          createMutation.mutate({ name, type });
+        onSubmit={(name, type, unit) => {
+          createMutation.mutate({ name, type, unit });
           setShowAddDialog(false);
         }}
       />
@@ -380,8 +381,8 @@ export default function HabitTracker() {
         open={showEditDialog}
         onOpenChange={setShowEditDialog}
         habit={selectedHabit}
-        onSubmit={(id, name, type) => {
-          updateMutation.mutate({ id, name, type });
+        onSubmit={(id, name, type, unit) => {
+          updateMutation.mutate({ id, name, type, unit });
           setShowEditDialog(false);
         }}
       />
@@ -597,6 +598,9 @@ function HabitCard({
         <div>
           <p className="text-3xl font-bold text-gray-900 tabular-nums">
             {isCount ? habit.todayCount : habit.latestRecord ? habit.latestRecord.value : "—"}
+            {habit.unit && (
+              <span className="text-sm font-normal text-gray-400 ml-1">{habit.unit}</span>
+            )}
           </p>
           <div className="flex items-center gap-1 mt-1">
             {isCount ? (
@@ -673,19 +677,30 @@ function AddHabitDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (name: string, type: "count" | "value") => void;
+  onSubmit: (name: string, type: "count" | "value", unit: string) => void;
 }) {
   const [name, setName] = useState("");
   const [type, setType] = useState<"count" | "value">("count");
+  const [unit, setUnit] = useState("");
+
+  // Auto-set default unit when type changes
+  useEffect(() => {
+    if (type === "count") {
+      setUnit("次");
+    } else {
+      setUnit("");
+    }
+  }, [type]);
 
   const handleSubmit = () => {
     if (!name.trim()) {
       toast.error("请输入习惯名称");
       return;
     }
-    onSubmit(name.trim(), type);
+    onSubmit(name.trim(), type, unit.trim());
     setName("");
     setType("count");
+    setUnit("");
   };
 
   return (
@@ -729,6 +744,17 @@ function AddHabitDialog({
               </SelectContent>
             </Select>
           </div>
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-1.5 block">单位</label>
+            <Input
+              value={unit}
+              onChange={(e) => setUnit(e.target.value)}
+              placeholder={type === "count" ? "次" : "例如：KG、ml、杯..."}
+              className="rounded-xl"
+              maxLength={20}
+            />
+            <p className="text-xs text-gray-400 mt-1">显示在数值后面，如 83.8 KG</p>
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} className="rounded-xl">
@@ -753,21 +779,23 @@ function EditHabitDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   habit: HabitWithStats | null;
-  onSubmit: (id: number, name: string, type: "count" | "value") => void;
+  onSubmit: (id: number, name: string, type: "count" | "value", unit: string) => void;
 }) {
   const [name, setName] = useState("");
   const [type, setType] = useState<"count" | "value">("count");
+  const [unit, setUnit] = useState("");
 
   useEffect(() => {
     if (habit) {
       setName(habit.name);
       setType(habit.type);
+      setUnit(habit.unit || "");
     }
   }, [habit]);
 
   const handleSubmit = () => {
     if (!habit || !name.trim()) return;
-    onSubmit(habit.id, name.trim(), type);
+    onSubmit(habit.id, name.trim(), type, unit.trim());
   };
 
   return (
@@ -809,6 +837,16 @@ function EditHabitDialog({
                 </SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-1.5 block">单位</label>
+            <Input
+              value={unit}
+              onChange={(e) => setUnit(e.target.value)}
+              placeholder={type === "count" ? "次" : "例如：KG、ml、杯..."}
+              className="rounded-xl"
+              maxLength={20}
+            />
           </div>
         </div>
         <DialogFooter>

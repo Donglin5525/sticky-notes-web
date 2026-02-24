@@ -709,9 +709,10 @@ export const appRouter = router({
       .input(z.object({
         name: z.string().min(1).max(100),
         type: z.enum(["count", "value"]),
+        unit: z.string().max(20).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        return createHabit({ userId: ctx.user.id, name: input.name, type: input.type });
+        return createHabit({ userId: ctx.user.id, name: input.name, type: input.type, unit: input.unit });
       }),
 
     /** Update a habit */
@@ -720,11 +721,13 @@ export const appRouter = router({
         id: z.number(),
         name: z.string().min(1).max(100).optional(),
         type: z.enum(["count", "value"]).optional(),
+        unit: z.string().max(20).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         return updateHabit(input.id, ctx.user.id, {
           name: input.name,
           type: input.type,
+          unit: input.unit,
         });
       }),
 

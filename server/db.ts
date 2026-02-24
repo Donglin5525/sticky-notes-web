@@ -877,7 +877,7 @@ export async function getHabitById(habitId: number, userId: number) {
 }
 
 /** Create a new habit */
-export async function createHabit(data: { userId: number; name: string; type: "count" | "value" }) {
+export async function createHabit(data: { userId: number; name: string; type: "count" | "value"; unit?: string }) {
   const db = await getDb();
   if (!db) throw new Error("[Database] Cannot create habit: database not available");
 
@@ -890,6 +890,7 @@ export async function createHabit(data: { userId: number; name: string; type: "c
     userId: data.userId,
     name: data.name,
     type: data.type,
+    unit: data.unit || (data.type === "count" ? "\u6b21" : ""),
     sortOrder: maxSort + 1,
     isArchived: false,
     isDeleted: false,
@@ -900,13 +901,14 @@ export async function createHabit(data: { userId: number; name: string; type: "c
 }
 
 /** Update a habit */
-export async function updateHabit(habitId: number, userId: number, updates: { name?: string; type?: "count" | "value" }) {
+export async function updateHabit(habitId: number, userId: number, updates: { name?: string; type?: "count" | "value"; unit?: string }) {
   const db = await getDb();
   if (!db) throw new Error("[Database] Cannot update habit: database not available");
 
   const updateData: Record<string, unknown> = {};
   if (updates.name !== undefined) updateData.name = updates.name;
   if (updates.type !== undefined) updateData.type = updates.type;
+  if (updates.unit !== undefined) updateData.unit = updates.unit;
 
   if (Object.keys(updateData).length > 0) {
     await db.update(habits).set(updateData).where(and(eq(habits.id, habitId), eq(habits.userId, userId)));

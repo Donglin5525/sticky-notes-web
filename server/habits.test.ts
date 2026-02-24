@@ -50,7 +50,7 @@ describe("habits", () => {
   let createdHabitId: number;
 
   describe("habits.create", () => {
-    it("should create a count-type habit", async () => {
+    it("should create a count-type habit with default unit", async () => {
       const { ctx } = createAuthContext();
       const caller = appRouter.createCaller(ctx);
 
@@ -62,20 +62,23 @@ describe("habits", () => {
       expect(result).toBeDefined();
       expect(result.id).toBeDefined();
       expect(typeof result.id).toBe("number");
+      expect(result.unit).toBe("次");
       createdHabitId = result.id;
     });
 
-    it("should create a value-type habit", async () => {
+    it("should create a value-type habit with custom unit", async () => {
       const { ctx } = createAuthContext();
       const caller = appRouter.createCaller(ctx);
 
       const result = await caller.habits.create({
         name: "测试体重",
         type: "value",
+        unit: "KG",
       });
 
       expect(result).toBeDefined();
       expect(result.id).toBeDefined();
+      expect(result.unit).toBe("KG");
     });
 
     it("should reject unauthenticated requests", async () => {
@@ -201,6 +204,22 @@ describe("habits", () => {
       const habits = await caller.habits.list();
       const updated = habits.find((h) => h.id === createdHabitId);
       expect(updated?.name).toBe("更新后的习惯");
+    });
+
+    it("should update habit unit", async () => {
+      const { ctx } = createAuthContext();
+      const caller = appRouter.createCaller(ctx);
+
+      const result = await caller.habits.update({
+        id: createdHabitId,
+        unit: "支",
+      });
+
+      expect(result).toBeDefined();
+
+      const habits = await caller.habits.list();
+      const updated = habits.find((h) => h.id === createdHabitId);
+      expect(updated?.unit).toBe("支");
     });
   });
 
