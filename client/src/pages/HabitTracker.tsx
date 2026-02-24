@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import { useIsMobile } from "@/hooks/useMobile";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { cn } from "@/lib/utils";
@@ -276,18 +277,29 @@ export default function HabitTracker() {
   return (
     <div className="flex-1 flex flex-col h-full bg-[#F9FAFB] overflow-hidden">
       {/* Header */}
-      <header className="flex items-center justify-between px-8 py-5 bg-white border-b border-gray-100">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900">习惯打卡</h1>
-          <p className="text-sm text-gray-400 mt-0.5">{formatDate()}</p>
+      <header className="flex flex-col md:flex-row md:items-center md:justify-between px-4 md:px-8 py-3 md:py-5 bg-white border-b border-gray-100 gap-2 md:gap-0">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-lg md:text-xl font-semibold text-gray-900">习惯打卡</h1>
+            <p className="text-xs md:text-sm text-gray-400 mt-0.5">{formatDate()}</p>
+          </div>
+          {/* Mobile: Add button in header */}
+          <Button
+            onClick={() => setShowAddDialog(true)}
+            className="rounded-xl shadow-sm md:hidden"
+            size="sm"
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            新增
+          </Button>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 md:gap-3">
           {/* Tab Switcher */}
-          <div className="flex bg-gray-100 rounded-xl p-1">
+          <div className="flex bg-gray-100 rounded-xl p-1 flex-1 md:flex-initial">
             <button
               onClick={() => setActiveTab("dashboard")}
               className={cn(
-                "px-4 py-1.5 rounded-lg text-sm font-medium transition-all",
+                "flex-1 md:flex-initial px-3 md:px-4 py-1.5 rounded-lg text-xs md:text-sm font-medium transition-all",
                 activeTab === "dashboard"
                   ? "bg-white text-gray-900 shadow-sm"
                   : "text-gray-500 hover:text-gray-700"
@@ -298,13 +310,13 @@ export default function HabitTracker() {
             <button
               onClick={() => setActiveTab("analytics")}
               className={cn(
-                "px-4 py-1.5 rounded-lg text-sm font-medium transition-all",
+                "flex-1 md:flex-initial px-3 md:px-4 py-1.5 rounded-lg text-xs md:text-sm font-medium transition-all",
                 activeTab === "analytics"
                   ? "bg-white text-gray-900 shadow-sm"
                   : "text-gray-500 hover:text-gray-700"
               )}
             >
-              <span className="flex items-center gap-1.5">
+              <span className="flex items-center justify-center gap-1 md:gap-1.5">
                 <BarChart3 className="h-3.5 w-3.5" />
                 统计
               </span>
@@ -312,21 +324,22 @@ export default function HabitTracker() {
             <button
               onClick={() => setActiveTab("archive")}
               className={cn(
-                "px-4 py-1.5 rounded-lg text-sm font-medium transition-all",
+                "flex-1 md:flex-initial px-3 md:px-4 py-1.5 rounded-lg text-xs md:text-sm font-medium transition-all",
                 activeTab === "archive"
                   ? "bg-white text-gray-900 shadow-sm"
                   : "text-gray-500 hover:text-gray-700"
               )}
             >
-              <span className="flex items-center gap-1.5">
+              <span className="flex items-center justify-center gap-1 md:gap-1.5">
                 <Archive className="h-3.5 w-3.5" />
                 归档
               </span>
             </button>
           </div>
+          {/* Desktop: Add button */}
           <Button
             onClick={() => setShowAddDialog(true)}
-            className="rounded-xl shadow-sm"
+            className="rounded-xl shadow-sm hidden md:flex"
             size="sm"
           >
             <Plus className="h-4 w-4 mr-1.5" />
@@ -336,7 +349,7 @@ export default function HabitTracker() {
       </header>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto p-8">
+      <div className="flex-1 overflow-auto p-4 md:p-8">
         {activeTab === "dashboard" && (
           <DashboardView
             habits={habitsQuery.data || []}
@@ -475,7 +488,7 @@ function DashboardView({
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-5">
       {habits.map((habit) => (
         <HabitCard
           key={habit.id}
@@ -536,9 +549,9 @@ function HabitCard({
       onDragEnd={onDragEnd}
       onClick={onClick}
       className={cn(
-        "group bg-white rounded-2xl p-5 cursor-pointer transition-all duration-200",
+        "group bg-white rounded-2xl p-4 md:p-5 cursor-pointer transition-all duration-200",
         "border border-gray-100 hover:border-gray-200",
-        "shadow-sm hover:shadow-md",
+        "shadow-sm hover:shadow-md active:scale-[0.98]",
         isDragging && "opacity-40 scale-95",
         isDragOver && "border-blue-300 bg-blue-50/30 scale-[1.02]"
       )}
@@ -596,7 +609,7 @@ function HabitCard({
       {/* Stats */}
       <div className="flex items-end justify-between">
         <div>
-          <p className="text-3xl font-bold text-gray-900 tabular-nums">
+          <p className="text-2xl md:text-3xl font-bold text-gray-900 tabular-nums">
             {isCount ? habit.todayCount : habit.latestRecord ? habit.latestRecord.value : "—"}
             {habit.unit && (
               <span className="text-sm font-normal text-gray-400 ml-1">{habit.unit}</span>
@@ -637,7 +650,7 @@ function HabitCard({
           <button
             onClick={(e) => onQuickRecord(habit.id, e)}
             className={cn(
-              "w-12 h-12 rounded-xl flex items-center justify-center",
+              "w-11 h-11 md:w-12 md:h-12 rounded-xl flex items-center justify-center",
               "bg-blue-500 text-white shadow-sm",
               "hover:bg-blue-600 hover:shadow-md active:scale-95",
               "transition-all duration-150"
@@ -1047,13 +1060,13 @@ function AnalyticsView({ habits }: { habits: HabitWithStats[] }) {
   return (
     <div className="space-y-6">
       {/* Controls */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3 w-full sm:w-auto">
           <Select
             value={selectedHabitId?.toString() || ""}
             onValueChange={(v) => setSelectedHabitId(Number(v))}
           >
-            <SelectTrigger className="rounded-xl w-48">
+            <SelectTrigger className="rounded-xl w-full sm:w-48">
               <SelectValue placeholder="选择习惯" />
             </SelectTrigger>
             <SelectContent className="rounded-xl">
@@ -1066,13 +1079,13 @@ function AnalyticsView({ habits }: { habits: HabitWithStats[] }) {
           </Select>
         </div>
 
-        <div className="flex bg-gray-100 rounded-xl p-1">
+        <div className="flex bg-gray-100 rounded-xl p-1 w-full sm:w-auto">
           {(["week", "month", "quarter", "year"] as const).map((range) => (
             <button
               key={range}
               onClick={() => setTimeRange(range)}
               className={cn(
-                "px-3 py-1.5 rounded-lg text-sm font-medium transition-all",
+                "flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all",
                 timeRange === range
                   ? "bg-white text-gray-900 shadow-sm"
                   : "text-gray-500 hover:text-gray-700"
@@ -1133,9 +1146,9 @@ function CountChart({
   // For week/month show bar chart, for quarter/year show heatmap
   if (timeRange === "week" || timeRange === "month") {
     return (
-      <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
+      <div className="bg-white rounded-2xl p-4 md:p-6 border border-gray-100 shadow-sm">
         <h3 className="text-sm font-medium text-gray-500 mb-4">每日频次</h3>
-        <div className="flex items-end gap-1 h-48">
+        <div className="flex items-end gap-[1px] sm:gap-1 h-36 md:h-48">
           {dailyData.map((d) => {
             const height = maxCount > 0 ? (d.count / maxCount) * 100 : 0;
             return (
@@ -1167,7 +1180,7 @@ function CountChart({
 
   // Heatmap for quarter/year
   return (
-    <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
+    <div className="bg-white rounded-2xl p-4 md:p-6 border border-gray-100 shadow-sm">
       <h3 className="text-sm font-medium text-gray-500 mb-4">打卡热力图</h3>
       <div className="flex flex-wrap gap-1">
         {dailyData.map((d) => {
@@ -1312,9 +1325,9 @@ function ValueChart({
 
   if (sortedRecords.length === 0) {
     return (
-      <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
+      <div className="bg-white rounded-2xl p-4 md:p-6 border border-gray-100 shadow-sm">
         <h3 className="text-sm font-medium text-gray-500 mb-4">数值趋势</h3>
-        <div className="flex items-center justify-center h-48 text-gray-400">
+        <div className="flex items-center justify-center h-36 md:h-48 text-gray-400">
           <p>暂无记录数据</p>
         </div>
       </div>
@@ -1322,9 +1335,9 @@ function ValueChart({
   }
 
   return (
-    <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
+    <div className="bg-white rounded-2xl p-4 md:p-6 border border-gray-100 shadow-sm">
       <h3 className="text-sm font-medium text-gray-500 mb-4">数值趋势</h3>
-      <canvas ref={canvasRef} className="w-full h-48" />
+      <canvas ref={canvasRef} className="w-full h-36 md:h-48" />
       <div className="flex justify-between mt-2 text-xs text-gray-400">
         <span>{new Date(sortedRecords[0].timestamp).toLocaleDateString("zh-CN")}</span>
         <span>共 {sortedRecords.length} 条记录</span>
@@ -1371,7 +1384,7 @@ function ArchiveView({
       {habits.map((habit) => (
         <div
           key={habit.id}
-          className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center justify-between"
+          className="bg-white rounded-2xl p-4 md:p-5 border border-gray-100 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3"
         >
           <div className="flex items-center gap-3">
             <div
@@ -1397,11 +1410,11 @@ function ArchiveView({
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
             <Button
               variant="outline"
               size="sm"
-              className="rounded-xl"
+              className="rounded-xl flex-1 sm:flex-initial"
               onClick={() => onRestore(habit.id)}
             >
               <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
@@ -1410,7 +1423,7 @@ function ArchiveView({
             <Button
               variant="outline"
               size="sm"
-              className="rounded-xl text-red-500 hover:text-red-600 hover:bg-red-50"
+              className="rounded-xl text-red-500 hover:text-red-600 hover:bg-red-50 flex-1 sm:flex-initial"
               onClick={() => setConfirmDeleteId(habit.id)}
             >
               <Trash2 className="h-3.5 w-3.5 mr-1.5" />
