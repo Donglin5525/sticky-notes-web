@@ -39,6 +39,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { TagTree } from "@/components/TagTree";
 import { useIsMobile } from "@/hooks/useMobile";
+import { useNotesFilter } from "@/contexts/NotesFilterContext";
 import {
   Sheet,
   SheetContent,
@@ -55,7 +56,8 @@ export default function Home() {
   const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterColor, setFilterColor] = useState<NoteColor | "all">("all");
-  const [filterTag, setFilterTag] = useState<string | null>(null);
+  // Use shared filter context for tag filtering (synced with sidebar)
+  const { filterTag, setFilterTag, setAllTags } = useNotesFilter();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [showTrash, setShowTrash] = useState(false);
   const [showChangelog, setShowChangelog] = useState(false);
@@ -203,6 +205,13 @@ export default function Home() {
     return Array.from(tagSet);
   }, [notes]);
 
+  // Sync allTags to shared context for sidebar tag tree
+  const allTagsKey = JSON.stringify(allTags);
+  useEffect(() => {
+    setAllTags(allTags);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allTagsKey]);
+
   // Selected note
   const selectedNote = useMemo(() => {
     if (!selectedNoteId) return null;
@@ -330,8 +339,8 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Tags */}
-      {allTags.length > 0 && (
+      {/* Tags - shown in sidebar on desktop, inline on mobile */}
+      {isMobile && allTags.length > 0 && (
         <div className="mb-6">
           <h3 className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">
             标签
