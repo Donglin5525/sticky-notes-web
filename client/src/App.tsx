@@ -262,16 +262,17 @@ function MainLayout() {
 
   if (isMobile) {
     // Mobile Layout: full screen content + bottom tab bar
+    // Default to /habits for mobile on first load
     return (
       <div className="flex flex-col h-[100dvh] overflow-hidden">
         <main className="flex-1 overflow-hidden pb-14">
           <Switch>
-            <Route path="/" component={Home} />
+            <Route path="/" component={HabitTracker} />
             <Route path="/notes" component={Home} />
             <Route path="/todo" component={DailyTodo} />
             <Route path="/habits" component={HabitTracker} />
             <Route path="/404" component={NotFound} />
-            <Route component={NotFound} />
+            <Route component={HabitTracker} />
           </Switch>
         </main>
         <MobileTabBar />
