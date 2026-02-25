@@ -28,9 +28,9 @@ function MobileTabBar() {
   const isHabitTab = location === "/habits";
 
   const tabs = [
-    { path: "/", label: "便签", icon: StickyNote, active: isNotesTab },
-    { path: "/todo", label: "待办", icon: CheckSquare, active: isTodoTab },
     { path: "/habits", label: "打卡", icon: Target, active: isHabitTab },
+    { path: "/todo", label: "待办", icon: CheckSquare, active: isTodoTab },
+    { path: "/", label: "便签", icon: StickyNote, active: isNotesTab },
   ];
 
   return (
