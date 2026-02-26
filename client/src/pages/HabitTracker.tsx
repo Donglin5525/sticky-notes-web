@@ -1138,6 +1138,16 @@ function CountChart({
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       days.push({ date: key, count: map.get(key) || 0 });
     }
+    
+    // For better visualization, if most days are 0, show only the range with data
+    const hasData = days.filter(d => d.count > 0);
+    if (hasData.length > 0 && hasData.length < days.length * 0.3) {
+      // If less than 30% of days have data, show only from first data day to last data day
+      const firstDataIndex = days.findIndex(d => d.count > 0);
+      const lastDataIndex = days.length - 1 - [...days].reverse().findIndex(d => d.count > 0);
+      return days.slice(firstDataIndex, lastDataIndex + 1);
+    }
+    
     return days;
   }, [records, timeRange]);
 
@@ -1158,7 +1168,7 @@ function CountChart({
                 </div>
                 <div
                   className="w-full rounded-t-md bg-blue-400 hover:bg-blue-500 transition-colors min-h-[2px]"
-                  style={{ height: `${Math.max(height, 1)}%` }}
+                  style={{ height: `${Math.max(height * 1.92, 2)}px` }}
                 />
                 {timeRange === "week" && (
                   <span className="text-[10px] text-gray-400">
