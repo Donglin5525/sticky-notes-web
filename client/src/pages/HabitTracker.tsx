@@ -368,7 +368,7 @@ export default function HabitTracker() {
           />
         )}
         {activeTab === "analytics" && (
-          <AnalyticsView habits={habitsQuery.data || []} />
+          <AnalyticsView habits={habitsQuery.data || []} sortMutation={sortMutation} />
         )}
         {activeTab === "archive" && (
           <ArchiveView
@@ -1004,7 +1004,7 @@ function RecordSheet({
 }
 
 // ==================== Analytics View (Placeholder) ====================
-function AnalyticsView({ habits }: { habits: HabitWithStats[] }) {
+function AnalyticsView({ habits, sortMutation }: { habits: HabitWithStats[], sortMutation: any }) {
   const [selectedHabitId, setSelectedHabitId] = useState<number | null>(null);
   const [timeRange, setTimeRange] = useState<"week" | "month" | "quarter" | "year">("month");
 
@@ -1061,7 +1061,7 @@ function AnalyticsView({ habits }: { habits: HabitWithStats[] }) {
     <div className="space-y-6">
       {/* Controls */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-3 w-full sm:w-auto">
+        <div className="flex items-center gap-3 w-full sm:w-auto flex-wrap">
           <Select
             value={selectedHabitId?.toString() || ""}
             onValueChange={(v) => setSelectedHabitId(Number(v))}
@@ -1077,6 +1077,45 @@ function AnalyticsView({ habits }: { habits: HabitWithStats[] }) {
               ))}
             </SelectContent>
           </Select>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="rounded-xl">
+                <ArrowUp className="h-4 w-4 mr-2" />
+                排序
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="rounded-xl" align="start">
+              <DropdownMenuItem onClick={() => {
+                const sorted = [...habits].sort((a, b) => (b.latestRecord?.timestamp || 0) - (a.latestRecord?.timestamp || 0));
+                const updates = sorted.map((h, i) => ({ id: h.id, sortOrder: i }));
+                sortMutation.mutate(updates);
+              }}>
+                <TrendingUp className="h-4 w-4 mr-2" />
+                最近打卡
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => {
+                const sorted = [...habits].sort((a, b) => {
+                  const countA = a.todayCount + (typeof a.todaySum === 'number' ? a.todaySum : parseInt(a.todaySum) || 0);
+                  const countB = b.todayCount + (typeof b.todaySum === 'number' ? b.todaySum : parseInt(b.todaySum) || 0);
+                  return countB - countA;
+                });
+                const updates = sorted.map((h, i) => ({ id: h.id, sortOrder: i }));
+                sortMutation.mutate(updates);
+              }}>
+                <Hash className="h-4 w-4 mr-2" />
+                打卡次数
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => {
+                const sorted = [...habits].sort((a, b) => b.createdAt - a.createdAt);
+                const updates = sorted.map((h, i) => ({ id: h.id, sortOrder: i }));
+                sortMutation.mutate(updates);
+              }}>
+                <Target className="h-4 w-4 mr-2" />
+                最新创建
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <div className="flex bg-gray-100 rounded-xl p-1 w-full sm:w-auto">
@@ -1163,7 +1202,7 @@ function CountChart({
             const height = maxCount > 0 ? (d.count / maxCount) * 100 : 0;
             return (
               <div key={d.date} className="flex-1 flex flex-col items-center gap-1 group relative">
-                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                <div className="absolute -top-6 sm:-top-8 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 bottom-full mb-1 sm:mb-0">
                   {d.date}: {d.count}次
                 </div>
                 <div
