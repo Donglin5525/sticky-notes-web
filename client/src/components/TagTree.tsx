@@ -39,6 +39,7 @@ interface TagTreeProps {
   onRenameTag?: (oldTag: string, newTag: string) => void;
   onDeleteTag?: (tag: string) => void;
   onMoveTag?: (tag: string, newParent: string | null) => void;
+  onAddTag?: (parentPath: string | null, tagName: string) => void;
 }
 
 // 将扁平的标签列表转换为树形结构
@@ -117,6 +118,7 @@ function TagNodeItem({
   onRenameTag,
   onDeleteTag,
   onMoveTag,
+  onAddTag,
   allTags,
   isLast,
 }: {
@@ -129,13 +131,16 @@ function TagNodeItem({
   onRenameTag?: (oldTag: string, newTag: string) => void;
   onDeleteTag?: (tag: string) => void;
   onMoveTag?: (tag: string, newParent: string | null) => void;
+  onAddTag?: (parentPath: string | null, tagName: string) => void;
   allTags: string[];
   isLast?: boolean;
 }) {
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [showMoveDialog, setShowMoveDialog] = useState(false);
+  const [showAddDialog, setShowAddDialog] = useState(false);
   const [newName, setNewName] = useState(node.name);
   const [newParent, setNewParent] = useState<string | null>(null);
+  const [newTagName, setNewTagName] = useState("");
   
   const hasChildren = node.children.length > 0;
   const isExpanded = expandedPaths.has(node.fullPath);
@@ -260,6 +265,15 @@ function TagNodeItem({
                   重命名
                 </DropdownMenuItem>
               )}
+              {onAddTag && (
+                <DropdownMenuItem onClick={() => {
+                  setNewTagName("");
+                  setShowAddDialog(true);
+                }}>
+                  <Folder className="mr-2 h-3.5 w-3.5" />
+                  新增子标签
+                </DropdownMenuItem>
+              )}
               {onMoveTag && parentOptions.length > 0 && (
                 <DropdownMenuItem onClick={() => {
                   setNewParent(null);
@@ -300,6 +314,7 @@ function TagNodeItem({
               onRenameTag={onRenameTag}
               onDeleteTag={onDeleteTag}
               onMoveTag={onMoveTag}
+              onAddTag={onAddTag}
               allTags={allTags}
               isLast={index === node.children.length - 1}
             />
@@ -329,6 +344,40 @@ function TagNodeItem({
               取消
             </Button>
             <Button onClick={handleRename} disabled={!newName.trim() || newName === node.name}>
+              确认
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Tag Dialog */}
+      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>新增子标签</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm mb-3">
+              在 <span className="font-medium">{node.fullPath}</span> 下新增:
+            </p>
+            <Input
+              value={newTagName}
+              onChange={(e) => setNewTagName(e.target.value)}
+              placeholder="输入标签名称"
+              onKeyDown={(e) => e.key === "Enter" && newTagName.trim() && onAddTag?.(node.fullPath, newTagName)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddDialog(false)}>
+              取消
+            </Button>
+            <Button onClick={() => {
+              if (newTagName.trim() && onAddTag) {
+                onAddTag(node.fullPath, newTagName);
+                setShowAddDialog(false);
+                setNewTagName("");
+              }
+            }} disabled={!newTagName.trim()}>
               确认
             </Button>
           </DialogFooter>
@@ -390,7 +439,7 @@ function getAllExpandablePaths(tags: string[]): Set<string> {
   return paths;
 }
 
-export function TagTree({ tags, selectedTag, onSelectTag, onRenameTag, onDeleteTag, onMoveTag }: TagTreeProps) {
+export function TagTree({ tags, selectedTag, onSelectTag, onRenameTag, onDeleteTag, onMoveTag, onAddTag }: TagTreeProps) {
   // 默认展开所有层级
   const allExpandablePaths = useMemo(() => getAllExpandablePaths(tags), [tags]);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(allExpandablePaths);
@@ -458,6 +507,7 @@ export function TagTree({ tags, selectedTag, onSelectTag, onRenameTag, onDeleteT
           onRenameTag={onRenameTag}
           onDeleteTag={onDeleteTag}
           onMoveTag={onMoveTag}
+          onAddTag={onAddTag}
           allTags={tags}
         />
       ))}
