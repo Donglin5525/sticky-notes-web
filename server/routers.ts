@@ -234,6 +234,19 @@ export const appRouter = router({
         return result;
       }),
 
+    /** Add a new tag under a parent */
+    add: protectedProcedure
+      .input(
+        z.object({
+          parentPath: z.string().nullable(),
+          tagName: z.string(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const fullPath = input.parentPath ? `${input.parentPath}/${input.tagName}` : input.tagName;
+        return { success: true, newTag: fullPath };
+      }),
+
     /** Move a tag under another parent */
     move: protectedProcedure
       .input(

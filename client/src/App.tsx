@@ -82,6 +82,9 @@ function DesktopSidebar() {
   const moveTagMutation = trpc.tags.move.useMutation({
     onSuccess: () => utils.notes.list.invalidate(),
   });
+  const addTagMutation = trpc.tags.add.useMutation({
+    onSuccess: () => utils.notes.list.invalidate(),
+  });
 
   return (
     <aside className="w-64 border-r border-border/50 bg-sidebar/50 backdrop-blur-xl flex flex-col">
@@ -198,6 +201,7 @@ function DesktopSidebar() {
                 onRenameTag={(oldTag, newTag) => renameTagMutation.mutate({ oldTag, newTag })}
                 onDeleteTag={(tag) => deleteTagMutation.mutate({ tag })}
                 onMoveTag={(tag, newParent) => moveTagMutation.mutate({ tag, newParent })}
+                onAddTag={(parentPath, tagName) => addTagMutation.mutate({ parentPath, tagName })}
               />
             </ScrollArea>
           )}
