@@ -163,10 +163,33 @@ export default function HabitTracker() {
   });
 
   const quickRecordMutation = trpc.habits.quickRecord.useMutation({
+    onMutate: async (variables) => {
+      await utils.habits.list.cancel();
+      const previousData = utils.habits.list.getData();
+      if (previousData) {
+        const updatedData = previousData.map((habit) => {
+          if (habit.id === variables.habitId) {
+            return {
+              ...habit,
+              todayCount: (habit.todayCount || 0) + 1,
+            };
+          }
+          return habit;
+        });
+        utils.habits.list.setData(undefined, updatedData);
+      }
+      return { previousData };
+    },
     onSuccess: () => {
+      toast.success("已记录", { duration: 1500 });
       utils.habits.list.invalidate();
     },
-    onError: () => toast.error("记录失败"),
+    onError: (error, variables, context) => {
+      if (context?.previousData) {
+        utils.habits.list.setData(undefined, context.previousData);
+      }
+      toast.error("记录失败，请重试");
+    },
   });
 
   const addRecordMutation = trpc.habits.addRecord.useMutation({
