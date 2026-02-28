@@ -6,6 +6,8 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { useEffect } from "react";
+import { markVersionAsSeen } from "@/components/ChangelogDialog";
 
 interface ChangelogEntry {
   version: string;
@@ -83,6 +85,13 @@ interface NotesChangelogDialogProps {
 }
 
 export function NotesChangelogDialog({ open, onOpenChange }: NotesChangelogDialogProps) {
+  // 当弹窗打开时，标记用户已查看当前版本
+  useEffect(() => {
+    if (open) {
+      markVersionAsSeen();
+    }
+  }, [open]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[80vh]">
