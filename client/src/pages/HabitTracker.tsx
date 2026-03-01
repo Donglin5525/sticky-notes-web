@@ -59,7 +59,7 @@ import {
   Minus,
   FileText,
 } from "lucide-react";
-import { ChangelogDialog, checkForNewVersion } from "@/components/ChangelogDialog";
+import { ChangelogDialog, checkForNewVersion, markVersionAsSeen } from "@/components/ChangelogDialog";
 import { APP_VERSION } from "@shared/version";
 
 // ==================== Types ====================
@@ -110,8 +110,10 @@ export default function HabitTracker() {
   const [showChangelogDialog, setShowChangelogDialog] = useState(false);
 
   // 检查新版本，首次访问新版本时自动弹出更新日志
+  // 立即标记已读，防止切换 Tab 时重复弹出
   useEffect(() => {
     if (checkForNewVersion()) {
+      markVersionAsSeen();
       const timer = setTimeout(() => {
         setShowChangelogDialog(true);
       }, 500);

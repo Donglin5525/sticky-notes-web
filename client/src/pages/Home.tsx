@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { NotesChangelogDialog } from "@/components/NotesChangelogDialog";
-import { checkForNewVersion } from "@/components/ChangelogDialog";
+import { checkForNewVersion, markVersionAsSeen } from "@/components/ChangelogDialog";
 import { APP_VERSION } from "@shared/version";
 import { FileText } from "lucide-react";
 import { toast } from "sonner";
@@ -65,8 +65,10 @@ export default function Home() {
   const [showMobileSearch, setShowMobileSearch] = useState(false);
 
   // 检查新版本，首次访问新版本时自动弹出更新日志
+  // 立即标记已读，防止切换 Tab 时重复弹出
   useEffect(() => {
     if (checkForNewVersion()) {
+      markVersionAsSeen();
       const timer = setTimeout(() => {
         setShowChangelog(true);
       }, 500);
