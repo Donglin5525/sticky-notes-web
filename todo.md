@@ -374,3 +374,9 @@
 ## 更新日志弹窗重复弹出问题（二次修复）
 - [x] 彻底修复更新日志每次打开应用都弹出的问题 - 已修复！根本原因是切换 Tab 时页面重新挂载再次触发 useEffect，现在在检测到新版本后立即调用 markVersionAsSeen() 写入 localStorage
 - [x] 确认习惯打卡 Tab 有更新日志入口 - 已确认！PC端文字按钮 + 移动端图标按钮，均已存在
+
+## 更新日志补充（v1.6.0）
+- [x] 排查更新日志未自动更新的根本原因 - 已排查！是 AI 执行疏漏，规范文档本身是正确的，但近期迭代时未遵守"每次 checkpoint 前更新 CHANGELOG.md"的规定
+- [x] 补充 CHANGELOG.md v1.6.0 版本记录（乐观更新、标签新增、排序、弹窗修复等）
+- [x] 补充 shared/changelog.json v1.6.0 版本记录（用于弹窗展示）
+- [x] 更新 DEVELOPMENT_STANDARDS.md 版本历史表格
