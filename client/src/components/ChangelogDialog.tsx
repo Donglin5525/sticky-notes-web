@@ -10,18 +10,43 @@ import { useEffect } from "react";
 import { APP_VERSION, VERSION_STORAGE_KEY } from "@shared/version";
 import changelogData from "@shared/changelog.json";
 
+// 模块标签配置：颜色与样式
+const MODULE_CONFIG: Record<string, { label: string; className: string }> = {
+  便签笔记: {
+    label: "便签笔记",
+    className: "bg-amber-100 text-amber-700 border-amber-200",
+  },
+  待办清单: {
+    label: "待办清单",
+    className: "bg-blue-100 text-blue-700 border-blue-200",
+  },
+  习惯打卡: {
+    label: "习惯打卡",
+    className: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  },
+  通用: {
+    label: "通用",
+    className: "bg-slate-100 text-slate-600 border-slate-200",
+  },
+};
+
+interface ChangelogChange {
+  module: string;
+  text: string;
+}
+
 interface ChangelogEntry {
   version: string;
   date: string;
   title: string;
-  changes: string[];
+  changes: ChangelogChange[];
 }
 
 /**
  * 唯一数据源：从 shared/changelog.json 读取
  * 新增版本时只需在 changelog.json 顶部添加条目，无需修改此文件
  */
-export const changelog: ChangelogEntry[] = changelogData.entries;
+export const changelog: ChangelogEntry[] = changelogData.entries as ChangelogEntry[];
 
 interface ChangelogDialogProps {
   open: boolean;
@@ -49,11 +74,7 @@ export function markVersionAsSeen(): void {
  * 全局统一更新日志弹窗
  * 数据来源：shared/changelog.json（唯一来源）
  * 版本号来源：changelog.json 第一条记录（自动联动）
- *
- * 使用方式：
- * - 在 App.tsx 中放置一个实例，通过 Context 或 props 控制 open 状态
- * - 各页面通过 checkForNewVersion() 判断是否需要弹出
- * - 各页面通过 onOpenChangelog() 回调手动打开
+ * 每条变更记录带有模块标签（便签笔记 / 待办清单 / 习惯打卡 / 通用）
  */
 export function ChangelogDialog({ open, onOpenChange }: ChangelogDialogProps) {
   // 弹窗打开时立即标记已读，防止切换 Tab 时重复弹出
@@ -101,19 +122,27 @@ export function ChangelogDialog({ open, onOpenChange }: ChangelogDialogProps) {
                 </div>
 
                 {/* Title */}
-                <h3 className="font-semibold mb-2">{entry.title}</h3>
+                <h3 className="font-semibold mb-3">{entry.title}</h3>
 
-                {/* Changes list */}
-                <ul className="space-y-1">
-                  {entry.changes.map((change, i) => (
-                    <li
-                      key={i}
-                      className="text-sm text-muted-foreground flex items-start gap-2"
-                    >
-                      <span className="text-primary mt-1">•</span>
-                      <span>{change}</span>
-                    </li>
-                  ))}
+                {/* Changes list with module badges */}
+                <ul className="space-y-2">
+                  {entry.changes.map((change, i) => {
+                    const moduleConfig =
+                      MODULE_CONFIG[change.module] ?? MODULE_CONFIG["通用"];
+                    return (
+                      <li
+                        key={i}
+                        className="text-sm text-muted-foreground flex items-start gap-2"
+                      >
+                        <span
+                          className={`inline-flex items-center shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium border mt-0.5 ${moduleConfig.className}`}
+                        >
+                          {moduleConfig.label}
+                        </span>
+                        <span className="leading-relaxed">{change.text}</span>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             ))}

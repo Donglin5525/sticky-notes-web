@@ -387,3 +387,9 @@
 - [x] 将弹窗状态提升到 App.tsx，三个页面共享同一个弹窗实例，彻底消除重复逻辑
 - [x] 更新三个页面（Home、DailyTodo、HabitTracker）的引用
 - [x] 更新 CHANGELOG.md 记录本次架构优化
+
+## 更新日志模块标签（用户需求）
+- [x] 更新 changelog.json 数据结构：每条变更从字符串改为 {module, text} 对象，module 取值：便签笔记/待办清单/习惯打卡/通用
+- [x] 更新历史版本（v1.0.0~v1.6.0）的所有变更记录，补充模块前缀
+- [x] 更新 ChangelogDialog 弹窗 UI，为每条变更展示彩色模块 Badge 标签
+- [x] 更新 CHANGELOG.md 同步记录
