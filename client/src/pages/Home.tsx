@@ -65,7 +65,24 @@ export default function Home() {
   const { openChangelog } = useChangelog();
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
-  const [filtersCollapsed, setFiltersCollapsed] = useState(false);
+  const [filtersCollapsed, setFiltersCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('notes-sidebar-collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  // Persist sidebar collapsed state
+  const toggleFiltersCollapsed = useCallback(() => {
+    setFiltersCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('notes-sidebar-collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  }, []);
 
   // tRPC queries
   const utils = trpc.useUtils();
@@ -603,7 +620,7 @@ export default function Home() {
             variant="ghost"
             size="icon"
             className="h-7 w-7 text-muted-foreground hover:text-foreground"
-            onClick={() => setFiltersCollapsed(!filtersCollapsed)}
+            onClick={toggleFiltersCollapsed}
             title={filtersCollapsed ? "展开侧边栏" : "收起侧边栏"}
           >
             {filtersCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}

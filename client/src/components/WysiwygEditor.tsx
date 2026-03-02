@@ -3,7 +3,7 @@ import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Extension } from "@tiptap/core";
-import { useEffect, forwardRef, useImperativeHandle, useState, useCallback, useRef } from "react";
+import { useEffect, forwardRef, useImperativeHandle, useState, useCallback, useRef, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { Tag } from "lucide-react";
 import { createPortal } from "react-dom";
@@ -35,14 +35,39 @@ const MarkdownShortcuts = Extension.create({
   },
 });
 
+// Highlight matched text in tag name
+function HighlightedTag({ tag, query }: { tag: string; query: string }) {
+  if (!query) return <span className="truncate">{tag}</span>;
+  
+  const lowerTag = tag.toLowerCase();
+  const lowerQuery = query.toLowerCase();
+  const matchIndex = lowerTag.indexOf(lowerQuery);
+  
+  if (matchIndex === -1) return <span className="truncate">{tag}</span>;
+  
+  const before = tag.slice(0, matchIndex);
+  const match = tag.slice(matchIndex, matchIndex + query.length);
+  const after = tag.slice(matchIndex + query.length);
+  
+  return (
+    <span className="truncate">
+      {before}
+      <span className="font-semibold text-primary underline decoration-primary/30">{match}</span>
+      {after}
+    </span>
+  );
+}
+
 // Tag suggestion dropdown component - rendered via portal with fixed positioning
 function TagSuggestions({
   tags,
+  query,
   selectedIndex,
   onSelect,
   position,
 }: {
   tags: string[];
+  query: string;
   selectedIndex: number;
   onSelect: (tag: string) => void;
   position: { top: number; left: number };
@@ -92,7 +117,7 @@ function TagSuggestions({
           }}
         >
           <Tag className="h-3 w-3 text-gray-400 shrink-0" />
-          <span className="truncate">{tag}</span>
+          <HighlightedTag tag={tag} query={query} />
         </div>
       ))}
     </div>,
@@ -110,10 +135,25 @@ export const WysiwygEditor = forwardRef<WysiwygEditorRef, WysiwygEditorProps>(
     // Track whether we're in the middle of typing a tag (# has been typed but not yet confirmed with space)
     const isTypingTagRef = useRef(false);
 
-    // Filter tags based on query
-    const filteredTags = allTags.filter((tag) =>
-      tag.toLowerCase().includes(tagQuery.toLowerCase())
-    );
+    // Filter tags based on fuzzy query - supports substring matching
+    const filteredTags = useMemo(() => {
+      if (!tagQuery) return allTags;
+      const lowerQuery = tagQuery.toLowerCase();
+      
+      // Score-based sorting: prefix match > contains match
+      const scored = allTags
+        .filter((tag) => tag.toLowerCase().includes(lowerQuery))
+        .map((tag) => {
+          const lowerTag = tag.toLowerCase();
+          const index = lowerTag.indexOf(lowerQuery);
+          // Prefix match gets higher priority (lower score = better)
+          const score = index === 0 ? 0 : 1;
+          return { tag, score };
+        })
+        .sort((a, b) => a.score - b.score);
+      
+      return scored.map((s) => s.tag);
+    }, [allTags, tagQuery]);
 
     // Handle tag selection from dropdown
     const handleSelectTag = useCallback((tag: string) => {
@@ -361,12 +401,13 @@ export const WysiwygEditor = forwardRef<WysiwygEditorRef, WysiwygEditorProps>(
       <div ref={containerRef} className={`wysiwyg-editor relative ${className}`}>
         <EditorContent editor={editor} />
         {showTagSuggestions && (
-          <TagSuggestions
-            tags={filteredTags}
-            selectedIndex={selectedTagIndex}
-            onSelect={handleSelectTag}
-            position={suggestionPosition}
-          />
+        <TagSuggestions
+          tags={filteredTags}
+          query={tagQuery}
+          selectedIndex={selectedTagIndex}
+          onSelect={handleSelectTag}
+          position={suggestionPosition}
+        />
         )}
       </div>
     );
