@@ -64,7 +64,7 @@ import {
 import { useDraggable } from "@dnd-kit/core";
 import { useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { ChangelogDialog, checkForNewVersion, markVersionAsSeen } from "@/components/ChangelogDialog";
+import { useChangelog } from "@/App";
 import { APP_VERSION } from "@shared/version";
 
 // Task quadrant types
@@ -316,7 +316,7 @@ export default function DailyTodo() {
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
   const [showCarryOverDialog, setShowCarryOverDialog] = useState(false);
   const [showShortcutsDialog, setShowShortcutsDialog] = useState(false);
-  const [showChangelogDialog, setShowChangelogDialog] = useState(false);
+  const { openChangelog } = useChangelog();
   const [showBatchMoveDialog, setShowBatchMoveDialog] = useState(false);
   const [showBatchAddDialog, setShowBatchAddDialog] = useState(false);
   const [batchAddText, setBatchAddText] = useState("");
@@ -338,18 +338,6 @@ export default function DailyTodo() {
   // Summary state
   const [reflection, setReflection] = useState("");
   const [tomorrowPlan, setTomorrowPlan] = useState("");
-  
-  // 检查新版本，首次访问新版本时自动弹出更新日志
-  // 立即标记已读，防止切换 Tab 时重复弹出
-  useEffect(() => {
-    if (checkForNewVersion()) {
-      markVersionAsSeen();
-      const timer = setTimeout(() => {
-        setShowChangelogDialog(true);
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, []);
   
   // DnD sensors
   const sensors = useSensors(
@@ -921,7 +909,7 @@ export default function DailyTodo() {
                       <Settings className="h-4 w-4 mr-2" />
                       Prompt 管理
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setShowChangelogDialog(true)}>
+                    <DropdownMenuItem onClick={() => openChangelog()}>
                       <FileText className="h-4 w-4 mr-2" />
                       更新日志
                     </DropdownMenuItem>
@@ -1207,7 +1195,7 @@ export default function DailyTodo() {
                 variant="ghost"
                 size="sm"
                 className="text-muted-foreground hover:text-foreground"
-                onClick={() => setShowChangelogDialog(true)}
+                onClick={() => openChangelog()}
               >
                 <FileText className="h-4 w-4 mr-2" />
                 更新日志 v{APP_VERSION}
@@ -1494,9 +1482,6 @@ export default function DailyTodo() {
             </div>
           </DialogContent>
         </Dialog>
-        
-        {/* Changelog Dialog */}
-        <ChangelogDialog open={showChangelogDialog} onOpenChange={setShowChangelogDialog} />
         
         {/* Carry Over Dialog */}
         <Dialog open={showCarryOverDialog} onOpenChange={setShowCarryOverDialog}>
