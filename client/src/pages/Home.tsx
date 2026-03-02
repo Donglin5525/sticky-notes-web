@@ -233,16 +233,6 @@ export default function Home() {
     setSelectedNoteId(null);
   }, []);
 
-  // ESC key listener to close editor
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && selectedNoteId) {
-        closeEditor();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedNoteId, closeEditor]);
 
   // Handlers
   const handleCreateNote = () => {
