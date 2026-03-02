@@ -21,6 +21,9 @@ import {
   Filter,
   X,
   ChevronDown,
+  ChevronUp,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useChangelog } from "@/App";
@@ -62,6 +65,7 @@ export default function Home() {
   const { openChangelog } = useChangelog();
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
+  const [filtersCollapsed, setFiltersCollapsed] = useState(false);
 
   // tRPC queries
   const utils = trpc.useUtils();
@@ -589,44 +593,47 @@ export default function Home() {
   return (
     <div className="flex h-full overflow-hidden">
       {/* Sidebar for filters */}
-      <aside className="w-56 border-r border-border/50 bg-muted/30 flex flex-col">
-        {/* New Note Button */}
-        <div className="p-4">
+      <aside className={cn(
+        "border-r border-border/50 bg-muted/30 flex flex-col transition-all duration-300",
+        filtersCollapsed ? "w-12" : "w-56"
+      )}>
+        {/* Collapse/Expand Toggle */}
+        <div className={cn("p-2 flex", filtersCollapsed ? "justify-center" : "justify-end")}>
           <Button
-            onClick={handleCreateNote}
-            className="w-full gap-2 shadow-md"
-            disabled={createNoteMutation.isPending}
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+            onClick={() => setFiltersCollapsed(!filtersCollapsed)}
+            title={filtersCollapsed ? "展开侧边栏" : "收起侧边栏"}
           >
-            {createNoteMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Plus className="h-4 w-4" />
-            )}
-            新建便签
+            {filtersCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
           </Button>
         </div>
 
-        {/* Filters */}
-        <ScrollArea className="flex-1 px-4">
-          {filterContent}
-        </ScrollArea>
+        {/* Filters - hidden when collapsed */}
+        {!filtersCollapsed && (
+          <ScrollArea className="flex-1 px-4">
+            {filterContent}
+          </ScrollArea>
+        )}
 
         {/* Trash */}
-        <div className="p-4 border-t border-border/50">
+        <div className={cn("border-t border-border/50", filtersCollapsed ? "p-2" : "p-4")}>
           <Button
             variant={showTrash ? "secondary" : "ghost"}
-            className="w-full justify-start gap-2"
+            className={cn(filtersCollapsed ? "w-full justify-center p-2" : "w-full justify-start gap-2")}
             onClick={() => setShowTrash(!showTrash)}
+            title={showTrash ? "返回便签" : "回收站"}
           >
-            <Trash2 className="h-4 w-4" />
-            {showTrash ? "返回便签" : "回收站"}
-            {trashedNotes.length > 0 && !showTrash && (
+            <Trash2 className="h-4 w-4 shrink-0" />
+            {!filtersCollapsed && (showTrash ? "返回便签" : "回收站")}
+            {!filtersCollapsed && trashedNotes.length > 0 && !showTrash && (
               <Badge variant="secondary" className="ml-auto">
                 {trashedNotes.length}
               </Badge>
             )}
           </Button>
-          {showTrash && trashedNotes.length > 0 && (
+          {!filtersCollapsed && showTrash && trashedNotes.length > 0 && (
             <Button
               variant="destructive"
               size="sm"
@@ -643,32 +650,41 @@ export default function Home() {
         </div>
 
         {/* Changelog */}
-        <div className="px-4 pb-2">
+        <div className={cn(filtersCollapsed ? "px-2 pb-1" : "px-4 pb-2")}>
           <Button
             variant="ghost"
             size="sm"
-            className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground"
+            className={cn(
+              "text-muted-foreground hover:text-foreground",
+              filtersCollapsed ? "w-full justify-center p-2" : "w-full justify-start gap-2"
+            )}
             onClick={() => openChangelog()}
+            title={"更新日志 v" + APP_VERSION}
           >
-            <FileText className="h-4 w-4" />
-            更新日志 v{APP_VERSION}
+            <FileText className="h-4 w-4 shrink-0" />
+            {!filtersCollapsed && `更新日志 v${APP_VERSION}`}
           </Button>
         </div>
 
         {/* User Menu */}
-        <div className="p-4 border-t border-border/50">
+        <div className={cn("border-t border-border/50", filtersCollapsed ? "p-2" : "p-4")}>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="w-full justify-start gap-2 h-auto py-2">
-                <Avatar className="h-8 w-8">
+              <Button variant="ghost" className={cn(
+                "h-auto",
+                filtersCollapsed ? "w-full justify-center p-2" : "w-full justify-start gap-2 py-2"
+              )}>
+                <Avatar className="h-8 w-8 shrink-0">
                   <AvatarFallback className="bg-primary/10 text-primary">
                     {user?.name?.charAt(0) || <User className="h-4 w-4" />}
                   </AvatarFallback>
                 </Avatar>
-                <div className="flex-1 text-left min-w-0 overflow-hidden">
-                  <p className="text-sm font-medium truncate">{user?.name || "用户"}</p>
-                  <p className="text-xs text-muted-foreground truncate max-w-full">{user?.email}</p>
-                </div>
+                {!filtersCollapsed && (
+                  <div className="flex-1 text-left min-w-0 overflow-hidden">
+                    <p className="text-sm font-medium truncate">{user?.name || "用户"}</p>
+                    <p className="text-xs text-muted-foreground truncate max-w-full">{user?.email}</p>
+                  </div>
+                )}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
@@ -694,7 +710,7 @@ export default function Home() {
             </Badge>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <div className="relative w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -704,6 +720,18 @@ export default function Home() {
                 className="pl-9"
               />
             </div>
+            <Button
+              onClick={handleCreateNote}
+              className="gap-2 shadow-md"
+              disabled={createNoteMutation.isPending}
+            >
+              {createNoteMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+              新建便签
+            </Button>
           </div>
         </header>
 

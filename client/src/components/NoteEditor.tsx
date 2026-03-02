@@ -61,6 +61,20 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete, allTags = [], on
   const editorRef = useRef<WysiwygEditorRef>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // 提取内容中已确认的 #标签（标签后面必须跟空格、换行或位于行尾才算确认）
+  const extractConfirmedTags = useCallback((text: string): string[] => {
+    const tagRegex = /#([\u4e00-\u9fa5a-zA-Z0-9_\/]+)(?=[\s\n]|$)/gm;
+    const tags = new Set<string>();
+    let match;
+    while ((match = tagRegex.exec(text)) !== null) {
+      const tag = match[1].trim();
+      if (tag && tag.length > 0) {
+        tags.add(tag);
+      }
+    }
+    return Array.from(tags);
+  }, []);
+
   // Image upload mutation
   const uploadImageMutation = trpc.notes.uploadImage.useMutation({
     onError: () => toast.error("图片上传失败，请重试"),
@@ -82,14 +96,25 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete, allTags = [], on
   }, [note.id]);
 
   // Debounced save for title and content
+  // 标签提取也在这里统一处理：只有当内容变化并经过 500ms debounce 后才提取已确认的标签
   useEffect(() => {
     const timer = setTimeout(() => {
       if (title !== note.title || content !== (note.content || "")) {
-        onUpdate(note.id, { title, content });
+        // 提取内容中已确认的标签（#标签后跟空格才算确认）
+        const confirmedTags = extractConfirmedTags(content);
+        const currentTags = note.tags || [];
+        const newTags = confirmedTags.filter(tag => !currentTags.includes(tag));
+        
+        if (newTags.length > 0) {
+          // 合并新标签和内容更新一起保存
+          onUpdate(note.id, { title, content, tags: [...currentTags, ...newTags] });
+        } else {
+          onUpdate(note.id, { title, content });
+        }
       }
     }, 500);
     return () => clearTimeout(timer);
-  }, [title, content, note.id, note.title, note.content, onUpdate]);
+  }, [title, content, note.id, note.title, note.content, onUpdate, extractConfirmedTags, note.tags]);
 
   // Handle image upload (for both paste and file input)
   const handleImageUpload = useCallback(async (file: File): Promise<string> => {
@@ -181,37 +206,11 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete, allTags = [], on
     onClose();
   };
 
-  // 提取内容中的 #标签
-  const extractTagsFromContent = useCallback((text: string): string[] => {
-    // 匹配 #标签 格式，支持中文、英文、数字、下划线、斜杠（用于层级标签）
-    const tagRegex = /#([\u4e00-\u9fa5a-zA-Z0-9_\/]+)/g;
-    const tags = new Set<string>();
-    let match;
-    while ((match = tagRegex.exec(text)) !== null) {
-      const tag = match[1].trim();
-      if (tag && tag.length > 0) {
-        tags.add(tag);
-      }
-    }
-    return Array.from(tags);
-  }, []);
-
   const handleContentChange = useCallback((newContent: string) => {
     setContent(newContent);
-    
-    // 自动提取内容中的标签并添加到标签列表
-    const contentTags = extractTagsFromContent(newContent);
-    const currentTags = note.tags || [];
-    
-    // 找出内容中新出现的标签（不在当前标签列表中的）
-    const newTags = contentTags.filter(tag => !currentTags.includes(tag));
-    
-    // 如果有新标签，添加到标签列表
-    if (newTags.length > 0) {
-      const updatedTags = [...currentTags, ...newTags];
-      onUpdate(note.id, { tags: updatedTags });
-    }
-  }, [extractTagsFromContent, note.tags, note.id, onUpdate]);
+    // 标签提取不在这里实时执行，而是延迟到 debounce 保存时统一处理
+    // 这样可以避免用户输入 # 后第一个字就被识别为标签
+  }, []);
 
   // Handle tag click from editor content
   const handleEditorTagClick = useCallback((tag: string) => {

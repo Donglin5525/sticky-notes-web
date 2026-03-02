@@ -6,6 +6,7 @@ import { Extension } from "@tiptap/core";
 import { useEffect, forwardRef, useImperativeHandle, useState, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { Tag } from "lucide-react";
+import { createPortal } from "react-dom";
 
 interface WysiwygEditorProps {
   content: string;
@@ -34,7 +35,7 @@ const MarkdownShortcuts = Extension.create({
   },
 });
 
-// Tag suggestion dropdown component
+// Tag suggestion dropdown component - rendered via portal with fixed positioning
 function TagSuggestions({
   tags,
   selectedIndex,
@@ -48,25 +49,54 @@ function TagSuggestions({
 }) {
   if (tags.length === 0) return null;
 
-  return (
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // Scroll selected item into view
+  useEffect(() => {
+    if (listRef.current) {
+      const selectedEl = listRef.current.children[selectedIndex] as HTMLElement;
+      if (selectedEl) {
+        selectedEl.scrollIntoView({ block: "nearest" });
+      }
+    }
+  }, [selectedIndex]);
+
+  // Calculate position to avoid going off-screen
+  const maxHeight = 240;
+  const viewportHeight = window.innerHeight;
+  const spaceBelow = viewportHeight - position.top;
+  const showAbove = spaceBelow < maxHeight && position.top > maxHeight;
+
+  return createPortal(
     <div
-      className="absolute z-50 bg-white border border-gray-200 rounded-lg shadow-lg py-1 max-h-48 overflow-auto min-w-[160px]"
-      style={{ top: position.top, left: position.left }}
+      className="fixed z-[9999] bg-white border border-gray-200 rounded-lg shadow-xl py-1 min-w-[200px]"
+      style={{
+        top: showAbove ? undefined : position.top,
+        bottom: showAbove ? viewportHeight - position.top + 8 : undefined,
+        left: Math.min(position.left, window.innerWidth - 220),
+        maxHeight: `${maxHeight}px`,
+        overflowY: "auto",
+      }}
+      ref={listRef}
     >
       {tags.map((tag, index) => (
         <div
           key={tag}
           className={cn(
-            "flex items-center gap-2 px-3 py-1.5 cursor-pointer text-sm",
+            "flex items-center gap-2 px-3 py-2 cursor-pointer text-sm",
             index === selectedIndex ? "bg-primary/10 text-primary" : "hover:bg-gray-50"
           )}
-          onClick={() => onSelect(tag)}
+          onMouseDown={(e) => {
+            e.preventDefault(); // Prevent editor blur
+            onSelect(tag);
+          }}
         >
-          <Tag className="h-3 w-3 text-gray-400" />
-          <span>{tag}</span>
+          <Tag className="h-3 w-3 text-gray-400 shrink-0" />
+          <span className="truncate">{tag}</span>
         </div>
       ))}
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -77,13 +107,15 @@ export const WysiwygEditor = forwardRef<WysiwygEditorRef, WysiwygEditorProps>(
     const [selectedTagIndex, setSelectedTagIndex] = useState(0);
     const [suggestionPosition, setSuggestionPosition] = useState({ top: 0, left: 0 });
     const containerRef = useRef<HTMLDivElement>(null);
+    // Track whether we're in the middle of typing a tag (# has been typed but not yet confirmed with space)
+    const isTypingTagRef = useRef(false);
 
     // Filter tags based on query
     const filteredTags = allTags.filter((tag) =>
       tag.toLowerCase().includes(tagQuery.toLowerCase())
     );
 
-    // Handle tag selection
+    // Handle tag selection from dropdown
     const handleSelectTag = useCallback((tag: string) => {
       if (editor) {
         // Delete the # and query text
@@ -100,6 +132,7 @@ export const WysiwygEditor = forwardRef<WysiwygEditorRef, WysiwygEditorProps>(
       }
       setShowTagSuggestions(false);
       setTagQuery("");
+      isTypingTagRef.current = false;
     }, [tagQuery]);
 
     const editor = useEditor({
@@ -157,25 +190,26 @@ export const WysiwygEditor = forwardRef<WysiwygEditorRef, WysiwygEditorProps>(
         const { selection } = state;
         const { $from } = selection;
         
-        // Get text before cursor
+        // Get text before cursor in current text node
         const textBefore = $from.parent.textContent.slice(0, $from.parentOffset);
         const hashMatch = textBefore.match(/#([^\s#]*)$/);
         
         if (hashMatch) {
+          isTypingTagRef.current = true;
           setTagQuery(hashMatch[1]);
           setShowTagSuggestions(true);
           setSelectedTagIndex(0);
           
-          // Calculate position for suggestions dropdown
+          // Calculate position using fixed coordinates (viewport-relative)
           const coords = editor.view.coordsAtPos(selection.from);
-          if (containerRef.current) {
-            const containerRect = containerRef.current.getBoundingClientRect();
-            setSuggestionPosition({
-              top: coords.bottom - containerRect.top + 4,
-              left: coords.left - containerRect.left,
-            });
-          }
+          setSuggestionPosition({
+            top: coords.bottom + 4,
+            left: coords.left,
+          });
         } else {
+          if (isTypingTagRef.current) {
+            isTypingTagRef.current = false;
+          }
           setShowTagSuggestions(false);
           setTagQuery("");
         }
@@ -204,6 +238,7 @@ export const WysiwygEditor = forwardRef<WysiwygEditorRef, WysiwygEditorProps>(
             }
             if (event.key === "Escape") {
               setShowTagSuggestions(false);
+              isTypingTagRef.current = false;
               return true;
             }
           }
@@ -465,8 +500,8 @@ function processInlineElements(text: string): string {
   // Links
   text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
   
-  // Tags - convert #tag to clickable span
-  text = text.replace(/#([^\s#]+)/g, '<span class="tag-link text-primary cursor-pointer hover:underline" data-tag="$1">#$1</span>');
+  // Tags - convert #tag to clickable span (only match tags followed by space or end of string)
+  text = text.replace(/#([\u4e00-\u9fa5a-zA-Z0-9_\/]+)(?=\s|$)/g, '<span class="tag-link text-primary cursor-pointer hover:underline" data-tag="$1">#$1</span>');
   
   // Bold and italic combined
   text = text.replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>");
