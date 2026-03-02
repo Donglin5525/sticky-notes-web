@@ -2,7 +2,9 @@ import { useEditor, EditorContent, Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
 import Placeholder from "@tiptap/extension-placeholder";
-import { Extension } from "@tiptap/core";
+import { Extension, Mark, mergeAttributes } from "@tiptap/core";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { useEffect, forwardRef, useImperativeHandle, useState, useCallback, useRef, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { Tag } from "lucide-react";
@@ -32,6 +34,49 @@ const MarkdownShortcuts = Extension.create({
 
   addInputRules() {
     return [];
+  },
+});
+
+// Tag highlight plugin key
+const tagHighlightKey = new PluginKey("tagHighlight");
+
+// Tag highlight extension - uses ProseMirror Decorations to highlight confirmed tags in real-time
+// A confirmed tag is: #tagname followed by a space or end of text node
+const TagHighlight = Extension.create({
+  name: "tagHighlight",
+
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: tagHighlightKey,
+        props: {
+          decorations(state) {
+            const decorations: Decoration[] = [];
+            const { doc } = state;
+            // Regex: #tag (followed by space or end of text)
+            const tagRegex = /#([\u4e00-\u9fa5a-zA-Z0-9_\/]+)(?=\s)/g;
+
+            doc.descendants((node, pos) => {
+              if (!node.isText) return;
+              const text = node.text || "";
+              let match;
+              tagRegex.lastIndex = 0;
+              while ((match = tagRegex.exec(text)) !== null) {
+                const from = pos + match.index;
+                const to = from + match[0].length;
+                decorations.push(
+                  Decoration.inline(from, to, {
+                    class: "tag-highlight",
+                  })
+                );
+              }
+            });
+
+            return DecorationSet.create(doc, decorations);
+          },
+        },
+      }),
+    ];
   },
 });
 
@@ -217,6 +262,7 @@ export const WysiwygEditor = forwardRef<WysiwygEditorRef, WysiwygEditorProps>(
           emptyEditorClass: "is-editor-empty",
         }),
         MarkdownShortcuts,
+        TagHighlight,
       ],
       content: convertMarkdownToHtml(content),
       editable,

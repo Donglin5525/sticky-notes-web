@@ -419,3 +419,7 @@
 - [x] Ctrl+Enter 快捷键：同保存按钮效果
 - [x] 移除自动 debounce 保存逻辑，改为手动保存
 - [x] 更新 CHANGELOG.md 和 changelog.json
+
+## 编辑器标签蓝色高亮（用户需求）
+- [x] 已确认的标签（#标签名+空格）在编辑器中整体渲染为蓝色，与普通文本颜色区分
+- [x] 更新 CHANGELOG.md 和 changelog.json

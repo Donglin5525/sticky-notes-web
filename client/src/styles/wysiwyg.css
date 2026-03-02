@@ -188,3 +188,23 @@
 .wysiwyg-editor .ProseMirror ul[data-type="taskList"] li input[type="checkbox"] {
   margin-top: 0.25em;
 }
+
+/* Confirmed tag highlight in editor - shown in blue to distinguish from regular text */
+.wysiwyg-editor .ProseMirror .tag-highlight {
+  color: #3b82f6;
+  font-weight: 500;
+  border-radius: 3px;
+  padding: 0 1px;
+}
+
+/* tag-link in rendered/preview mode */
+.tag-link {
+  color: #3b82f6;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.tag-link:hover {
+  text-decoration: underline;
+  color: #2563eb;
+}
