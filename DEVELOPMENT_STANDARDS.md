@@ -113,9 +113,32 @@
 ### 移动端导航顺序（底部 Tab）
 ```
 1. 打卡（/habits）- 首屏默认
-2. 代办（/todo）
-3. 便签（/）
+2. 待办（/todo）
+3. 便签（/notes）
 ```
+
+### 移动端路由规范（重要）
+
+**核心原则：根路径 `/` 永远映射到默认页（打卡），便签 Tab 使用 `/notes` 路径。**
+
+```
+移动端路由映射（App.tsx 中的 isMobile 分支）：
+  /          → HabitTracker  （默认页，打卡）
+  /habits    → HabitTracker
+  /todo      → DailyTodo
+  /notes     → Home（便签）
+  fallback   → HabitTracker  （默认页）
+
+MobileTabBar 中 Tab 路径：
+  打卡 Tab  点击跳转到 /habits
+  待办 Tab  点击跳转到 /todo
+  便签 Tab  点击跳转到 /notes（不是 /）
+
+打卡 Tab 高亮判断： location === "/habits" || location === "/"
+便签 Tab 高亮判断： location === "/notes"
+```
+
+> 警告：进行模板升级、路由重构、全局布局调整时，必须检查移动端路由映射表，确保上述映射关系不被改变。
 
 ### 响应式断点
 - 移动端：< 768px（md）

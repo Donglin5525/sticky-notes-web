@@ -407,3 +407,7 @@
 
 ## 移动端便签 Tab Bug 修复（用户反馈）
 - [x] 修复移动端便签 Tab 点进去显示打卡内容的问题（根因：移动端路由 / 被错误映射到 HabitTracker）
+
+## 移动端默认页修复（用户反馈）
+- [x] 修复移动端默认页：根路径 / 应映射到 HabitTracker（打卡），便签 Tab 路径为 /notes
+- [x] 更新 CHANGELOG.md 和 changelog.json

@@ -39,14 +39,15 @@ export function useChangelog() {
 function MobileTabBar() {
   const [location, setLocation] = useLocation();
 
-  const isNotesTab = location === "/" || location === "/notes";
+  const isNotesTab = location === "/notes";
   const isTodoTab = location === "/todo";
-  const isHabitTab = location === "/habits";
+  // 根路径 / 也属于打卡页（移动端默认页）
+  const isHabitTab = location === "/habits" || location === "/";
 
   const tabs = [
     { path: "/habits", label: "打卡", icon: Target, active: isHabitTab },
     { path: "/todo", label: "待办", icon: CheckSquare, active: isTodoTab },
-    { path: "/", label: "便签", icon: StickyNote, active: isNotesTab },
+    { path: "/notes", label: "便签", icon: StickyNote, active: isNotesTab },
   ];
 
   return (
@@ -299,15 +300,16 @@ function MainLayout() {
 
   const content = isMobile ? (
     // Mobile Layout: full screen content + bottom tab bar
+    // 移动端默认页为打卡（/habits），便签 Tab 路径为 /notes
     <div className="flex flex-col h-[100dvh] overflow-hidden">
       <main className="flex-1 overflow-hidden pb-14">
         <Switch>
-          <Route path="/" component={Home} />
+          <Route path="/" component={HabitTracker} />
           <Route path="/notes" component={Home} />
           <Route path="/todo" component={DailyTodo} />
           <Route path="/habits" component={HabitTracker} />
           <Route path="/404" component={NotFound} />
-          <Route component={Home} />
+          <Route component={HabitTracker} />
         </Switch>
       </main>
       <MobileTabBar />
