@@ -17,7 +17,23 @@ import { Button } from "./components/ui/button";
 import { TagTree } from "./components/TagTree";
 import { ScrollArea } from "./components/ui/scroll-area";
 import { trpc } from "./lib/trpc";
-import { useState, useEffect } from "react";
+import { useState, useEffect, createContext, useContext, useCallback } from "react";
+import { ChangelogDialog, checkForNewVersion, markVersionAsSeen } from "./components/ChangelogDialog";
+
+// ─── Global Changelog Context ────────────────────────────────────────────────
+// 全局更新日志弹窗 Context，让三个页面都能触发同一个弹窗实例
+interface ChangelogContextValue {
+  openChangelog: () => void;
+}
+
+const ChangelogContext = createContext<ChangelogContextValue>({
+  openChangelog: () => {},
+});
+
+export function useChangelog() {
+  return useContext(ChangelogContext);
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 // Mobile Bottom Tab Navigation
 function MobileTabBar() {
@@ -194,7 +210,6 @@ function DesktopSidebar() {
                   setFilterTag(tag);
                   // If not on notes page, navigate to it
                   if (location !== "/" && location !== "/notes") {
-                    // Use window to trigger navigation
                     window.dispatchEvent(new CustomEvent("navigate-to-notes"));
                   }
                 }}
@@ -219,6 +234,24 @@ function MainLayout() {
   const { user, loading: authLoading } = useAuth();
   const isMobile = useIsMobile();
   const [, setLocation] = useLocation();
+
+  // ── Global changelog state ──────────────────────────────────────────────
+  // 全局唯一弹窗实例，放在 MainLayout 而非各子页面
+  const [showChangelog, setShowChangelog] = useState(false);
+
+  const openChangelog = useCallback(() => {
+    setShowChangelog(true);
+  }, []);
+
+  // 应用启动时检查一次新版本，只触发一次
+  useEffect(() => {
+    if (!authLoading && user && checkForNewVersion()) {
+      markVersionAsSeen(); // 立即标记，防止重复触发
+      const timer = setTimeout(() => setShowChangelog(true), 800);
+      return () => clearTimeout(timer);
+    }
+  }, [authLoading, user]);
+  // ───────────────────────────────────────────────────────────────────────
 
   // Listen for navigate-to-notes event from sidebar tag click
   useEffect(() => {
@@ -264,28 +297,23 @@ function MainLayout() {
     );
   }
 
-  if (isMobile) {
+  const content = isMobile ? (
     // Mobile Layout: full screen content + bottom tab bar
-    // Default to /habits for mobile on first load
-    return (
-      <div className="flex flex-col h-[100dvh] overflow-hidden">
-        <main className="flex-1 overflow-hidden pb-14">
-          <Switch>
-            <Route path="/" component={HabitTracker} />
-            <Route path="/notes" component={Home} />
-            <Route path="/todo" component={DailyTodo} />
-            <Route path="/habits" component={HabitTracker} />
-            <Route path="/404" component={NotFound} />
-            <Route component={HabitTracker} />
-          </Switch>
-        </main>
-        <MobileTabBar />
-      </div>
-    );
-  }
-
-  // Desktop Layout: sidebar + content
-  return (
+    <div className="flex flex-col h-[100dvh] overflow-hidden">
+      <main className="flex-1 overflow-hidden pb-14">
+        <Switch>
+          <Route path="/" component={HabitTracker} />
+          <Route path="/notes" component={Home} />
+          <Route path="/todo" component={DailyTodo} />
+          <Route path="/habits" component={HabitTracker} />
+          <Route path="/404" component={NotFound} />
+          <Route component={HabitTracker} />
+        </Switch>
+      </main>
+      <MobileTabBar />
+    </div>
+  ) : (
+    // Desktop Layout: sidebar + content
     <div className="flex h-screen overflow-hidden">
       <DesktopSidebar />
       <main className="flex-1 flex flex-col overflow-hidden">
@@ -299,6 +327,14 @@ function MainLayout() {
         </Switch>
       </main>
     </div>
+  );
+
+  return (
+    <ChangelogContext.Provider value={{ openChangelog }}>
+      {content}
+      {/* 全局唯一更新日志弹窗，所有页面共享同一实例 */}
+      <ChangelogDialog open={showChangelog} onOpenChange={setShowChangelog} />
+    </ChangelogContext.Provider>
   );
 }
 

@@ -380,3 +380,10 @@
 - [x] 补充 CHANGELOG.md v1.6.0 版本记录（乐观更新、标签新增、排序、弹窗修复等）
 - [x] 补充 shared/changelog.json v1.6.0 版本记录（用于弹窗展示）
 - [x] 更新 DEVELOPMENT_STANDARDS.md 版本历史表格
+
+## 更新日志架构重构（用户需求）
+- [x] 版本号联动：shared/version.ts 改为从 changelog.json 动态读取，不再手动维护版本号
+- [x] 合并弹窗：删除 NotesChangelogDialog 独立数据，统一使用 ChangelogDialog（读取 changelog.json）
+- [x] 将弹窗状态提升到 App.tsx，三个页面共享同一个弹窗实例，彻底消除重复逻辑
+- [x] 更新三个页面（Home、DailyTodo、HabitTracker）的引用
+- [x] 更新 CHANGELOG.md 记录本次架构优化

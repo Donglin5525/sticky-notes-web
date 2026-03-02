@@ -59,7 +59,7 @@ import {
   Minus,
   FileText,
 } from "lucide-react";
-import { ChangelogDialog, checkForNewVersion, markVersionAsSeen } from "@/components/ChangelogDialog";
+import { useChangelog } from "@/App";
 import { APP_VERSION } from "@shared/version";
 
 // ==================== Types ====================
@@ -107,19 +107,7 @@ export default function HabitTracker() {
   const [selectedHabit, setSelectedHabit] = useState<HabitWithStats | null>(null);
   const [draggedId, setDraggedId] = useState<number | null>(null);
   const [dragOverId, setDragOverId] = useState<number | null>(null);
-  const [showChangelogDialog, setShowChangelogDialog] = useState(false);
-
-  // 检查新版本，首次访问新版本时自动弹出更新日志
-  // 立即标记已读，防止切换 Tab 时重复弹出
-  useEffect(() => {
-    if (checkForNewVersion()) {
-      markVersionAsSeen();
-      const timer = setTimeout(() => {
-        setShowChangelogDialog(true);
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, []);
+  const { openChangelog } = useChangelog();
 
   // ==================== Queries ====================
   const habitsQuery = trpc.habits.list.useQuery(undefined, { enabled: !!user });
@@ -389,7 +377,7 @@ export default function HabitTracker() {
             variant="ghost"
             size="sm"
             className="hidden md:flex text-muted-foreground hover:text-foreground rounded-xl"
-            onClick={() => setShowChangelogDialog(true)}
+            onClick={() => openChangelog()}
           >
             <FileText className="h-4 w-4 mr-1.5" />
             更新日志 v{APP_VERSION}
@@ -399,7 +387,7 @@ export default function HabitTracker() {
             variant="ghost"
             size="icon"
             className="md:hidden rounded-xl text-muted-foreground"
-            onClick={() => setShowChangelogDialog(true)}
+            onClick={() => openChangelog()}
           >
             <FileText className="h-4 w-4" />
           </Button>
@@ -494,8 +482,6 @@ export default function HabitTracker() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Changelog Dialog */}
-      <ChangelogDialog open={showChangelogDialog} onOpenChange={setShowChangelogDialog} />
     </div>
   );
 }

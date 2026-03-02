@@ -23,8 +23,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { NotesChangelogDialog } from "@/components/NotesChangelogDialog";
-import { checkForNewVersion, markVersionAsSeen } from "@/components/ChangelogDialog";
+import { useChangelog } from "@/App";
 import { APP_VERSION } from "@shared/version";
 import { FileText } from "lucide-react";
 import { toast } from "sonner";
@@ -60,21 +59,9 @@ export default function Home() {
   const { filterTag, setFilterTag, setAllTags } = useNotesFilter();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [showTrash, setShowTrash] = useState(false);
-  const [showChangelog, setShowChangelog] = useState(false);
+  const { openChangelog } = useChangelog();
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
-
-  // 检查新版本，首次访问新版本时自动弹出更新日志
-  // 立即标记已读，防止切换 Tab 时重复弹出
-  useEffect(() => {
-    if (checkForNewVersion()) {
-      markVersionAsSeen();
-      const timer = setTimeout(() => {
-        setShowChangelog(true);
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, []);
 
   // tRPC queries
   const utils = trpc.useUtils();
@@ -511,7 +498,7 @@ export default function Home() {
                       size="sm"
                       className="w-full justify-start gap-2 text-muted-foreground"
                       onClick={() => {
-                        setShowChangelog(true);
+                        openChangelog();
                         setShowMobileFilters(false);
                       }}
                     >
@@ -594,8 +581,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* Changelog Dialog */}
-        <NotesChangelogDialog open={showChangelog} onOpenChange={setShowChangelog} />
       </div>
     );
   }
@@ -663,7 +648,7 @@ export default function Home() {
             variant="ghost"
             size="sm"
             className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground"
-            onClick={() => setShowChangelog(true)}
+            onClick={() => openChangelog()}
           >
             <FileText className="h-4 w-4" />
             更新日志 v{APP_VERSION}
@@ -754,8 +739,6 @@ export default function Home() {
         </div>
       </main>
 
-      {/* Changelog Dialog */}
-      <NotesChangelogDialog open={showChangelog} onOpenChange={setShowChangelog} />
     </div>
   );
 }
