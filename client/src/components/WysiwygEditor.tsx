@@ -15,6 +15,7 @@ interface WysiwygEditorProps {
   onChange: (content: string) => void;
   onImageUpload?: (file: File) => Promise<string>;
   onTagClick?: (tag: string) => void;
+  onSave?: () => void;
   allTags?: string[];
   placeholder?: string;
   className?: string;
@@ -171,7 +172,7 @@ function TagSuggestions({
 }
 
 export const WysiwygEditor = forwardRef<WysiwygEditorRef, WysiwygEditorProps>(
-  ({ content, onChange, onImageUpload, onTagClick, allTags = [], placeholder = "开始输入...", className = "", editable = true }, ref) => {
+  ({ content, onChange, onImageUpload, onTagClick, onSave, allTags = [], placeholder = "开始输入...", className = "", editable = true }, ref) => {
     const [showTagSuggestions, setShowTagSuggestions] = useState(false);
     const [tagQuery, setTagQuery] = useState("");
     const [selectedTagIndex, setSelectedTagIndex] = useState(0);
@@ -333,6 +334,14 @@ export const WysiwygEditor = forwardRef<WysiwygEditorRef, WysiwygEditorProps>(
           const { selection } = state;
           const { $from, empty } = selection;
           
+          // Ctrl+Enter / Cmd+Enter → trigger save, prevent newline
+          if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+            event.preventDefault();
+            event.stopPropagation();
+            if (onSave) onSave();
+            return true;
+          }
+
           // Handle Backspace on empty list items
           if (event.key === "Backspace" && empty) {
             const parent = $from.parent;

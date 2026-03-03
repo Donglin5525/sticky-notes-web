@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle } from "react";
 import { Note, NoteColor, noteColors, quadrantConfig, getQuadrant } from "@/types/note";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -64,7 +64,11 @@ const colorPickerMap = {
   orange: "bg-orange-400",
 };
 
-export function NoteEditor({ note, onClose, onUpdate, onDelete, allTags = [], onTagClick }: NoteEditorProps) {
+export interface NoteEditorRef {
+  save: () => void;
+}
+
+export const NoteEditor = forwardRef<NoteEditorRef, NoteEditorProps>(({ note, onClose, onUpdate, onDelete, allTags = [], onTagClick }, forwardedRef) => {
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content || "");
   const [newTag, setNewTag] = useState("");
@@ -119,6 +123,25 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete, allTags = [], on
     return title !== initialTitleRef.current || content !== initialContentRef.current;
   }, [title, content]);
 
+  // ── 暴露 save 方法给外部 ref ─────────────────────────────────────────────
+  useImperativeHandle(forwardedRef, () => ({
+    save: () => {
+      // 只有有内容时才保存
+      if (title.trim() || content.trim()) {
+        const confirmedTags = extractConfirmedTags(content);
+        const currentTags = note.tags || [];
+        const newTags = confirmedTags.filter(tag => !currentTags.includes(tag));
+        const updates: Partial<Note> = { title, content };
+        if (newTags.length > 0) {
+          updates.tags = [...currentTags, ...newTags];
+        }
+        onUpdate(note.id, updates);
+        initialTitleRef.current = title;
+        initialContentRef.current = content;
+      }
+    },
+  }), [title, content, note.id, note.tags, onUpdate, extractConfirmedTags]);
+
   // ── 保存逻辑 ──────────────────────────────────────────────────────────────
   const handleSave = useCallback(() => {
     // 提取内容中已确认的标签
@@ -158,16 +181,12 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete, allTags = [], on
   }, [onClose]);
 
   // ── 键盘快捷键 ─────────────────────────────────────────────────────────────
+  // Note: Ctrl+Enter is handled inside WysiwygEditor (TipTap level) to prevent newline.
+  // ESC is handled here at window level for the overall editor panel.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl+Enter / Cmd+Enter → 保存
-      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-        e.preventDefault();
-        handleSave();
-        return;
-      }
-      // ESC → 取消
-      if (e.key === "Escape") {
+      // ESC → 取消（WysiwygEditor 内部的 ESC 用于关闭标签建议，不会冒泡到这里）
+      if (e.key === "Escape" && !e.defaultPrevented) {
         e.preventDefault();
         handleCancel();
         return;
@@ -175,7 +194,7 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete, allTags = [], on
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleSave, handleCancel]);
+  }, [handleCancel]);
 
   // Handle image upload (for both paste and file input)
   const handleImageUpload = useCallback(async (file: File): Promise<string> => {
@@ -443,6 +462,7 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete, allTags = [], on
                 onChange={handleContentChange}
                 onImageUpload={handleImageUpload}
                 onTagClick={handleEditorTagClick}
+                onSave={handleSave}
                 allTags={allTags}
                 placeholder="支持 Markdown 语法，输入 - 空格 创建列表，输入 # 插入标签..."
                 className="min-h-[200px]"
@@ -591,4 +611,4 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete, allTags = [], on
       </AlertDialog>
     </>
   );
-}
+});

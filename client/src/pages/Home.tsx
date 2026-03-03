@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { NoteCard } from "@/components/NoteCard";
-import { NoteEditor } from "@/components/NoteEditor";
+import { NoteEditor, NoteEditorRef } from "@/components/NoteEditor";
 import { QuadrantView } from "@/components/QuadrantView";
 import { Note, NoteColor, noteColors, getQuadrant, quadrantConfig } from "@/types/note";
 import { cn } from "@/lib/utils";
@@ -25,7 +25,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useChangelog } from "@/App";
 import { APP_VERSION } from "@shared/version";
 import { FileText } from "lucide-react";
@@ -228,8 +228,19 @@ export default function Home() {
     return notes.find((n: Note) => n.id === selectedNoteId) || null;
   }, [notes, selectedNoteId]);
 
+  // NoteEditor ref to call save from outside
+  const noteEditorRef = useRef<NoteEditorRef>(null);
+
   // Close editor handler
   const closeEditor = useCallback(() => {
+    setSelectedNoteId(null);
+  }, []);
+
+  // Close with auto-save: if note has content, save first then close
+  const closeEditorWithSave = useCallback(() => {
+    if (noteEditorRef.current) {
+      noteEditorRef.current.save();
+    }
     setSelectedNoteId(null);
   }, []);
 
@@ -579,6 +590,7 @@ export default function Home() {
         {selectedNote && !showTrash && (
           <div className="fixed inset-0 z-50 bg-background" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
             <NoteEditor
+              ref={noteEditorRef}
               note={selectedNote as Note}
               onClose={closeEditor}
               onUpdate={handleUpdateNote}
@@ -754,10 +766,11 @@ export default function Home() {
             <>
               <div
                 className="fixed inset-0 bg-black/10 lg:bg-transparent z-40 lg:absolute lg:inset-auto lg:left-0 lg:top-0 lg:right-1/2 lg:bottom-0"
-                onClick={closeEditor}
+                onClick={closeEditorWithSave}
               />
               <div className="fixed right-0 top-0 bottom-0 w-full sm:w-[480px] lg:relative lg:w-1/2 border-l border-border/50 bg-background z-50 lg:z-auto shadow-2xl lg:shadow-none">
                 <NoteEditor
+                  ref={noteEditorRef}
                   note={selectedNote as Note}
                   onClose={closeEditor}
                   onUpdate={handleUpdateNote}
